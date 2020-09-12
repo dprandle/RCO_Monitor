@@ -81,12 +81,12 @@ struct pwm_measurement
     double seconds; // the time from the last edge to this one
 };
 
-class edgpio
+class Gpio
 {
   public:
 
-	edgpio(int pin);
-	~edgpio();
+	Gpio(int pin);
+	~Gpio();
 	
 	int set_direction(gpio_dir dir);
 	

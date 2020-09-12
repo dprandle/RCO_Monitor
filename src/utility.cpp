@@ -2,20 +2,21 @@
 #include <unistd.h>
 #include <exception>
 #include <stdexcept>
-#include <edutility.h>
+#include <utility.h>
 #include <ctime>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
-#include <edtimer.h>
-#include <edmctrl.h>
+#include <timer.h>
+#include <main_control.h>
 
-
+namespace util
+{
 static std::string locked_str;
 
 void delay(double ms)
 {
-	edtimer t;
+	Timer t;
 	t.start();
     while ((t.elapsed() * 1000.0) < ms)
 		t.update();
@@ -93,4 +94,4 @@ void copy_buf(const int8_t * src, int8_t * dest, uint32_t size, uint32_t src_off
         dest_with_offset[i] = src_with_offset[i];
 }
 
-
+}

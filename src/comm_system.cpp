@@ -1,22 +1,22 @@
-#include <edtimer.h>
+#include <timer.h>
 #include <unistd.h>
-#include <edmctrl.h>
-#include <edcomm_system.h>
+#include <main_control.h>
+#include <comm_system.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <edutility.h>
+#include <utility.h>
 #include <string.h>
 #include <errno.h>
-#include <edsocket.h>
-#include <edlogger.h>
+#include <socket.h>
+#include <logger.h>
 
-edcomm_system::edcomm_system() : m_server_fd(0), m_port(0), m_cur_packet(), m_cur_index(0)
+Comm_System::Comm_System() : m_server_fd(0), m_port(0), m_cur_packet(), m_cur_index(0)
 {}
 
-edcomm_system::~edcomm_system()
+Comm_System::~Comm_System()
 {}
 
-void edcomm_system::init()
+void Comm_System::init()
 {
     sockaddr_in server;
 
@@ -44,17 +44,17 @@ void edcomm_system::init()
     ilog("Listening on port {}", m_port);
 }
 
-uint16_t edcomm_system::port()
+uint16_t Comm_System::port()
 {
     return m_port;
 }
 
-void edcomm_system::set_port(uint16_t port_)
+void Comm_System::set_port(uint16_t port_)
 {
     m_port = port_;
 }
 
-void edcomm_system::release()
+void Comm_System::release()
 {
     while (m_clients.begin() != m_clients.end())
     {
@@ -64,7 +64,7 @@ void edcomm_system::release()
     close(m_server_fd);
 }
 
-uint32_t edcomm_system::recvFromClients(uint8_t * data, uint32_t max_size)
+uint32_t Comm_System::recvFromClients(uint8_t * data, uint32_t max_size)
 {
     uint32_t total = 0;
     for (uint32_t i = 0; i < m_clients.size(); ++i)
@@ -72,20 +72,20 @@ uint32_t edcomm_system::recvFromClients(uint8_t * data, uint32_t max_size)
     return total;
 }
 
-void edcomm_system::sendToClients(uint8_t * data, uint32_t size)
+void Comm_System::sendToClients(uint8_t * data, uint32_t size)
 {
     for (uint32_t i = 0; i < m_clients.size(); ++i)
         m_clients[i]->write(data, size);
 }
 
-void edcomm_system::update()
+void Comm_System::update()
 {
     sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
     int32_t sockfd = accept(m_server_fd, (struct sockaddr *)&client_addr, &client_len);
     if (sockfd != -1)
     {
-        edsocket * new_client = new edsocket(sockfd);
+        Socket * new_client = new Socket(sockfd);
         if (!new_client->start())
         {
             wlog("Received connection but could not start socket - should see deletion next");
@@ -105,7 +105,7 @@ void edcomm_system::update()
         _handle_byte(buf[i]);
 }
 
-void edcomm_system::_clean_closed_connections()
+void Comm_System::_clean_closed_connections()
 {
     ClientArray::iterator iter = m_clients.begin();
     while (iter != m_clients.end())
@@ -118,27 +118,27 @@ void edcomm_system::_clean_closed_connections()
             std::string client_ip = std::string(inet_ntoa(cl_addr.sin_addr)) + ":" +
                                     std::to_string(ntohs(cl_addr.sin_port));
 
-            edthreaded_fd::Error er = (*iter)->error();
+            Threaded_Fd::Error er = (*iter)->error();
             std::string errno_message = strerror(er._errno);
 
             switch (er.err_val)
             {
-            case (edthreaded_fd::ConnectionClosed):
+            case (Threaded_Fd::ConnectionClosed):
                 ilog("Connection closed with {}", client_ip);
                 break;
-            case (edthreaded_fd::DataOverwrite):
+            case (Threaded_Fd::DataOverwrite):
                 elog("Socket internal buffer overwritten with new data before previous data was "
                      "sent {} - Errno message: {}",
                      client_ip,
                      errno_message);
                 break;
-            case (edthreaded_fd::InvalidRead):
+            case (Threaded_Fd::InvalidRead):
                 elog("Socket invalid read from {} - Errno message {}", client_ip, errno_message);
                 break;
-            case (edthreaded_fd::InvalidWrite):
+            case (Threaded_Fd::InvalidWrite):
                 elog("Socket invalid write to {} - Errno message: {}", client_ip, errno_message);
                 break;
-            case (edthreaded_fd::ThreadCreation):
+            case (Threaded_Fd::ThreadCreation):
                 elog("Error in thread creation for connection with {}", client_ip);
                 break;
             default:
@@ -153,7 +153,7 @@ void edcomm_system::_clean_closed_connections()
     }
 }
 
-void edcomm_system::_handle_byte(uint8_t byte)
+void Comm_System::_handle_byte(uint8_t byte)
 {
     if (m_cur_index < PACKET_ID_SIZE)
     {
@@ -168,70 +168,10 @@ void edcomm_system::_handle_byte(uint8_t byte)
     }
 }
 
-void edcomm_system::_do_configure(uint8_t cur_byte)
+void Comm_System::_do_configure(uint8_t cur_byte)
 {
-    int adjusted_cur_index = m_cur_index - PACKET_ID_SIZE;
-    if (adjusted_cur_index < PACKET_ID_SIZE)
-    {
-        dlog("Receiving size of each vec - byte: {} and total int val now {} with adjusted index of {}", cur_byte, m_cur_config.sample_cnt, adjusted_cur_index);
-        m_cur_config.data[adjusted_cur_index] = cur_byte;
-        ++m_cur_index;
-        ++adjusted_cur_index;
-        if (adjusted_cur_index == PACKET_ID_SIZE)
-        {
-            int total_byte_count = m_cur_config.sample_cnt * LIGHT_COUNT;
-            dlog("Sample count for config is {} and total byte count is {}",m_cur_config.sample_cnt, total_byte_count);
-            for (int i = 0; i < LIGHT_COUNT; ++i)
-                m_cur_config.lights[i].ms_data.resize(m_cur_config.sample_cnt);
-        }
-    }
-    else
-    {
-        adjusted_cur_index -= PACKET_ID_SIZE;
-        int total_byte_count = m_cur_config.sample_cnt * LIGHT_COUNT;        
-        if (adjusted_cur_index < total_byte_count)
-        {
-            int sample_index = adjusted_cur_index % m_cur_config.sample_cnt;
-            int light_index = adjusted_cur_index / m_cur_config.sample_cnt;
-            m_cur_config.lights[light_index].ms_data[sample_index] = cur_byte;
-            ++m_cur_index;
-            ++adjusted_cur_index;
-        }
-
-        if (adjusted_cur_index >= total_byte_count)
-        {
-            edlight_system * lsys = edm.sys<edlight_system>();
-            lsys->set_automation_data(m_cur_config);
-            m_cur_index = 0;
-            m_cur_packet = {};
-            m_cur_config = {};
-        }
-    }
 }
 
-void edcomm_system::_do_command()
+void Comm_System::_do_command()
 {
-    edlight_system * lsys = edm.sys<edlight_system>();
-    if (m_cur_packet.hashed_id == hash_id(PACKET_ID_CONFIGURE))
-    {
-        ilog("Received configure command");
-    }
-    else if (m_cur_packet.hashed_id == hash_id(PACKET_ID_PLAY))
-    {
-        lsys->play();
-        m_cur_index = 0;
-        zero_buf(m_cur_packet.data, PACKET_ID_SIZE);
-    }
-    else if (m_cur_packet.hashed_id == hash_id(PACKET_ID_PAUSE))
-    {
-        lsys->pause();
-        m_cur_index = 0;
-        zero_buf(m_cur_packet.data, PACKET_ID_SIZE);
-    }
-    else if (m_cur_packet.hashed_id == hash_id(PACKET_ID_STOP))
-    {
-        lsys->stop();
-        m_cur_index = 0;
-        zero_buf(m_cur_packet.data, PACKET_ID_SIZE);
-    }
 }

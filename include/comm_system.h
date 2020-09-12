@@ -1,9 +1,7 @@
-#ifndef EDCOMM_SYSTEM_H
-#define EDCOMM_SYSTEM_H
+#pragma once
 
-#include <edsystem.h>
+#include <subsystem.h>
 #include <vector>
-#include <edlight_system.h>
 #include <string>
 
 #define SOCKET_BUFF_SIZE 
@@ -12,7 +10,7 @@
 struct rplidar_scan_message;
 struct pulsed_light_message;
 struct nav_message;
-class edsocket;
+class Socket;
 
 const std::string PACKET_ID_PLAY = "Play";
 const std::string PACKET_ID_PAUSE = "Pause";
@@ -30,13 +28,13 @@ struct Packet_ID
 };
 
 
-class edcomm_system : public edsystem
+class Comm_System : public Subsystem
 {
   public:
 
-	edcomm_system();
+	Comm_System();
 
-	virtual ~edcomm_system();
+	virtual ~Comm_System();
 	
     virtual void init();
 
@@ -57,7 +55,7 @@ class edcomm_system : public edsystem
 	static std::string TypeString() {return "edcomm_system";}
 
   private:
-	typedef std::vector<edsocket*> ClientArray;
+	typedef std::vector<Socket*> ClientArray;
 	
     void _handle_byte(uint8_t byte);
 	void _sendScan(rplidar_scan_message * scanmessage);
@@ -71,8 +69,4 @@ class edcomm_system : public edsystem
 	uint16_t m_port;
     Packet_ID m_cur_packet;
     uint32_t m_cur_index;
-	Automation_Data m_cur_config;
 };
-
-
-#endif

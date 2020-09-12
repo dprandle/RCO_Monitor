@@ -1,29 +1,19 @@
-/*!
-  \file   edmctrl.cpp
-  \author Daniel <dprandle@dprandle-CZ-17>
-  \date   Fri Jul 10 09:19:32 2015
-  
-  \brief  Master control file for the edison
-  
-  
-*/
-
-#include <edutility.h>
-#include <edmctrl.h>
-#include <edsystem.h>
+#include <utility.h>
+#include <main_control.h>
+#include <subsystem.h>
 #include <string>
 #include <vector>
-#include <edtimer.h>
-#include <edlogger.h>
+#include <timer.h>
+#include <logger.h>
 
-edmctrl::edmctrl():
+Main_Control::Main_Control():
 	m_running(false),
-	m_systimer(new edtimer())
+	m_systimer(new Timer())
 {
 	
 }
 
-edmctrl::~edmctrl()
+Main_Control::~Main_Control()
 {
 	delete m_systimer;
     sysmap::iterator sysiter = m_systems.begin();
@@ -34,7 +24,7 @@ edmctrl::~edmctrl()
     }
 }
 
-void edmctrl::init()
+void Main_Control::init()
 {
     m_logger.initialize();
     sysmap::iterator sysiter = m_systems.begin();
@@ -46,18 +36,18 @@ void edmctrl::init()
     }
 }
 
-edmctrl & edmctrl::inst()
+Main_Control & Main_Control::inst()
 {
-    static edmctrl controller;
+    static Main_Control controller;
     return controller;
 }
 
-bool edmctrl::running()
+bool Main_Control::running()
 {
     return m_running;
 }
 
-void edmctrl::release()
+void Main_Control::release()
 {
     //log_message("Releasing edison control engine");
 	sysmap::iterator sysiter = m_systems.begin();
@@ -70,7 +60,7 @@ void edmctrl::release()
     m_logger.terminate();
 }
 
-void edmctrl::update()
+void Main_Control::update()
 {
 	m_systimer->update();
     sysmap::iterator sysiter = m_systems.begin();
@@ -81,12 +71,12 @@ void edmctrl::update()
     }
 }
 
-edtimer * edmctrl::sys_timer()
+Timer * Main_Control::sys_timer()
 {
 	return m_systimer;
 }
 
-edsystem * edmctrl::sys(const std::string & sysname)
+Subsystem * Main_Control::sys(const std::string & sysname)
 {
     sysmap::iterator iter = m_systems.find(sysname);
     if (iter != m_systems.end())
@@ -94,7 +84,7 @@ edsystem * edmctrl::sys(const std::string & sysname)
     return NULL;
 }
 
-void edmctrl::rm_sys(const std::string & sysname)
+void Main_Control::rm_sys(const std::string & sysname)
 {
     sysmap::iterator iter = m_systems.find(sysname);
     if (iter != m_systems.end())
@@ -104,14 +94,14 @@ void edmctrl::rm_sys(const std::string & sysname)
     }
 }
 
-void edmctrl::start()
+void Main_Control::start()
 {
 	ilog("Starting light controller");
 	m_running = true;
 	m_systimer->start();
 }
 
-void edmctrl::stop()
+void Main_Control::stop()
 {
 	
 	m_systimer->stop();
@@ -119,7 +109,7 @@ void edmctrl::stop()
 	m_running = false;
 }
 
-void edmctrl::quit(void)
+void Main_Control::quit(void)
 {
 	edm.stop();
 	edm.release();

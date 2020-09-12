@@ -2,26 +2,26 @@
 
 #include <string>
 #include <map>
-#include <edlogger.h>
+#include <logger.h>
 
-#define edm edmctrl::inst()
+#define edm Main_Control::inst()
 
-class edsystem;
-class edtimer;
+class Subsystem;
+class Timer;
 
-typedef std::map<std::string,edsystem*> sysmap;
+typedef std::map<std::string,Subsystem*> sysmap;
 
-class edmctrl
+class Main_Control
 {
   public:
-    edmctrl();
-    virtual ~edmctrl();
+    Main_Control();
+    virtual ~Main_Control();
     
     template<class T>
     T * add_sys()
     {
         T * sys = new T();
-        std::pair<sysmap::iterator,bool> ret = m_systems.insert(std::pair<std::string,edsystem*>(sys->typestr(), sys));
+        std::pair<sysmap::iterator,bool> ret = m_systems.insert(std::pair<std::string,Subsystem*>(sys->typestr(), sys));
         if (!ret.second)
         {
             wlog("Could not add system {}",sys->typestr());
@@ -31,7 +31,7 @@ class edmctrl
         return sys;
     }
 
-    static edmctrl & inst();
+    static Main_Control & inst();
 
     bool running();
 
@@ -43,7 +43,7 @@ class edmctrl
 
 	void stop();
 
-	edtimer * sys_timer();
+	Timer * sys_timer();
 
     void update();
     
@@ -61,13 +61,13 @@ class edmctrl
         return static_cast<T*>(sys(T::TypeString()));
     }
 
-    edsystem * sys(const std::string & sysname);
+    Subsystem * sys(const std::string & sysname);
 
 	static void quit(void);
     
   private:
     bool m_running;
     sysmap m_systems;
-	edtimer * m_systimer;
-    edlogger m_logger;
+	Timer * m_systimer;
+    Logger m_logger;
 };

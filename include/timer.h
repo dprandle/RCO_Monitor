@@ -13,7 +13,7 @@
   You can also set up the timer to execute a callback every so often (every so many milliseconds) or you can
   set it to execute once after some delay.
  */
-class edtimer
+class Timer
 {
   public:
 	
@@ -23,14 +23,14 @@ class edtimer
 		continous_shot
 	};
 	
-	edtimer();
-	~edtimer();
+	Timer();
+	~Timer();
 	
 	void start();
 
 	void update();
 
-	std::function<void(edtimer*)> callback();
+	std::function<void(Timer*)> callback();
 
 	cb_mode callback_mode();
 
@@ -40,7 +40,7 @@ class edtimer
 	
 	void pause();
 
-	void set_callback(std::function<void(edtimer*)> cb_func);
+	void set_callback(std::function<void(Timer*)> cb_func);
 
 	void set_callback_mode(cb_mode mode);
 
@@ -69,7 +69,7 @@ class edtimer
 	timespec m_cb_delay;
 	timespec m_pause;
 	
-	std::function<void(edtimer*)> m_cb;
+	std::function<void(Timer*)> m_cb;
 	cb_mode m_cmode;
 };
 

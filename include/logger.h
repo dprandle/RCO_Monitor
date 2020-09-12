@@ -14,16 +14,16 @@ namespace spdlog
 class logger;
 }
 
-class edlogger
+class Logger
 {
   public:
-    edlogger();
-    ~edlogger();
+    Logger();
+    ~Logger();
 
     void initialize();
 
     void terminate();
 
   private:
-    std::shared_ptr<spdlog::logger> logger;
+    std::shared_ptr<spdlog::logger> logger_;
 };

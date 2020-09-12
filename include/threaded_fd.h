@@ -1,9 +1,8 @@
-#ifndef EDTHREADED_FD
-#define EDTHREADED_FD
+#pragma once
 
 #include <pthread.h>
 #include <vector>
-#include <edcallback.h>
+#include <callback.h>
 #include <string>
 #include <atomic>
 
@@ -12,9 +11,9 @@
 #define FD_TMP_BUFFER_SIZE 1024
 #define COMMAND_WAIT_DELAY 1
 
-class edtimer;
+class Timer;
 
-class edthreaded_fd
+class Threaded_Fd
 {
   public:
 
@@ -53,11 +52,11 @@ class edthreaded_fd
         int32_t response_size;
 	};
 	
-	edthreaded_fd(
+	Threaded_Fd(
 		uint32_t readbuf_size = DEFAULT_FD_READ_BUFFER_SIZE,
 		uint32_t writebuf_size = DEFAULT_FD_WRITE_BUFFER_SIZE);
 	
-    virtual ~edthreaded_fd();
+    virtual ~Threaded_Fd();
 
     virtual uint32_t read(uint8_t * buffer, uint32_t max_size);
 
@@ -84,7 +83,7 @@ class edthreaded_fd
 	virtual int32_t _raw_read(uint8_t * buffer, uint32_t max_size) = 0;
 	virtual int32_t _raw_write(uint8_t * buffer, uint32_t max_size) = 0;
 
-	void wait_callback_func(edtimer * timer);
+	void wait_callback_func(Timer * timer);
 
 	virtual void _do_read();
 	virtual void _do_write();
@@ -106,7 +105,7 @@ class edthreaded_fd
 	Error m_err;
 
 	uint32_t m_current_wait_for_byte_count;
-	edtimer * m_wait_timer;
+	Timer * m_wait_timer;
 	
 	pthread_mutex_t m_send_lock;
 	pthread_mutex_t m_recv_lock;
@@ -121,18 +120,16 @@ class edthreaded_fd
 	pthread_t m_thread;
 };
 
-struct command_wait_callback : public wait_ready_callback
+struct command_wait_callback : public Wait_Ready_Callback
 {
-	command_wait_callback(edthreaded_fd * _handle):
+	command_wait_callback(Threaded_Fd * _handle):
 		handle(_handle)
 	{}
 	
 	void exec()
 	{
-		wait_ready_callback::exec();
-		handle->_setError(edthreaded_fd::CommandNoResponse, 0);
+		Wait_Ready_Callback::exec();
+		handle->_setError(Threaded_Fd::CommandNoResponse, 0);
 	}
-	edthreaded_fd * handle;
+	Threaded_Fd * handle;
 };
-
-#endif

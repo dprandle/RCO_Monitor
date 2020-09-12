@@ -1,13 +1,13 @@
 #pragma once
 #include <string>
 
-class edsystem
+class Subsystem
 {
   public:
-    edsystem()
+    Subsystem()
     {}
 
-    virtual ~edsystem()
+    virtual ~Subsystem()
     {}
 
     virtual void init()

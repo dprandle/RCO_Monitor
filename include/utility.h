@@ -1,11 +1,12 @@
-#ifndef UTILITY_H
-#define UTILITY_H
+#pragma once
 
 #include <iostream>
 #include <string>
 #include <sstream>
 #include <pthread.h>
 
+namespace util
+{
 
 uint32_t hash_id(const std::string & to_hash);
 
@@ -37,5 +38,4 @@ void zero_buf(uint8_t * buf, uint32_t size);
 void copy_buf(const uint8_t * src, uint8_t * dest, uint32_t size, uint32_t src_offset=0, uint32_t dest_offset=0);
 
 void copy_buf(const int8_t * src, int8_t * dest, uint32_t size, uint32_t src_offset=0, uint32_t dest_offset=0);
-
-#endif
+}

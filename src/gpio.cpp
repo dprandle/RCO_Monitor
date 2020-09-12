@@ -1,4 +1,4 @@
-#include <edgpio.h>
+#include <gpio.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -6,11 +6,11 @@
 #include <errno.h>
 #include <string.h>
 #include <poll.h>
-#include <edutility.h>
-#include <edtimer.h>
-#include <edlogger.h>
+#include <utility.h>
+#include <timer.h>
+#include <logger.h>
 
-edgpio::edgpio(int pin)
+Gpio::Gpio(int pin)
     : m_isr_func(nullptr), m_err(), m_pin(pin), m_thread_running(), m_isr_thread(), m_isr(false)
 {
     char buffer[8];
@@ -29,7 +29,7 @@ edgpio::edgpio(int pin)
     }
 }
 
-edgpio::~edgpio()
+Gpio::~Gpio()
 {
     // Close the isr thread if needed
     if (m_thread_running.test_and_set())
@@ -59,7 +59,7 @@ edgpio::~edgpio()
     }
 }
 
-gpio_error_state edgpio::get_and_clear_error()
+gpio_error_state Gpio::get_and_clear_error()
 {
     gpio_error_state tmp = m_err;
     m_err.errno_code = 0;
@@ -67,7 +67,7 @@ gpio_error_state edgpio::get_and_clear_error()
     return tmp;
 }
 
-int edgpio::set_direction(gpio_dir dir)
+int Gpio::set_direction(gpio_dir dir)
 {
     char buf[FILE_BUF_SZ];
     int pin = m_pin;
@@ -108,7 +108,7 @@ int edgpio::set_direction(gpio_dir dir)
     return 0;
 }
 
-int edgpio::direction()
+int Gpio::direction()
 {
     char buf[FILE_BUF_SZ];
     char r_buf[5];
@@ -137,7 +137,7 @@ int edgpio::direction()
     return -1;
 }
 
-int edgpio::set_isr(gpio_isr_edge edge, std::function<void()> func)
+int Gpio::set_isr(gpio_isr_edge edge, std::function<void()> func)
 {
     // Close the isr thread if needed - no matter what after this the thread should be dead
     if (m_thread_running.test_and_set())
@@ -213,7 +213,7 @@ int edgpio::set_isr(gpio_isr_edge edge, std::function<void()> func)
     {
         m_thread_running.test_and_set();
         m_err.errno_code =
-            pthread_create(&m_isr_thread, nullptr, edgpio::_thread_exec, (void *)this);
+            pthread_create(&m_isr_thread, nullptr, Gpio::_thread_exec, (void *)this);
         if (m_err.errno_code)
         {
             // error occured
@@ -225,7 +225,7 @@ int edgpio::set_isr(gpio_isr_edge edge, std::function<void()> func)
     return 0;
 }
 
-void edgpio::update()
+void Gpio::update()
 {
     if (m_isr && m_isr_func != nullptr)
     {
@@ -241,21 +241,21 @@ void edgpio::update()
     }
 }
 
-int edgpio::pin_num()
+int Gpio::pin_num()
 {
     return m_pin;
 }
 
-void * edgpio::_thread_exec(void * param)
+void * Gpio::_thread_exec(void * param)
 {
-    edgpio * _this = static_cast<edgpio *>(param);
+    Gpio * _this = static_cast<Gpio *>(param);
     int pin = _this->m_pin;
     ilog("Starting gpio thread on pin {}", pin);
     _this->_exec();
     return nullptr;
 }
 
-int edgpio::read_pin()
+int Gpio::read_pin()
 {
     char buf[FILE_BUF_SZ];
     char r_val;
@@ -282,7 +282,7 @@ int edgpio::read_pin()
     }
 }
 
-int edgpio::write_pin(int val)
+int Gpio::write_pin(int val)
 {
     if (direction() == gpio_dir_in)
         return 0;
@@ -312,7 +312,7 @@ int edgpio::write_pin(int val)
     return 0;
 }
 
-void edgpio::set_input_mode(gpio_input_mode md)
+void Gpio::set_input_mode(gpio_input_mode md)
 {
     char buf[FILE_BUF_SZ];
     int pin = m_pin;
@@ -345,7 +345,7 @@ void edgpio::set_input_mode(gpio_input_mode md)
     }
 }
 
-void edgpio::set_output_mode(gpio_output_mode md)
+void Gpio::set_output_mode(gpio_output_mode md)
 {
     char buf[FILE_BUF_SZ];
     int pin = m_pin;
@@ -384,7 +384,7 @@ void edgpio::set_output_mode(gpio_output_mode md)
     }
 }
 
-void edgpio::_exec()
+void Gpio::_exec()
 {
     char buf[FILE_BUF_SZ];
     char r_val;
@@ -415,7 +415,7 @@ void edgpio::_exec()
     ilog("Ending gpio thread on pin {}", pin);
 }
 
-std::string edgpio::error_string(gpio_error_state gp_err)
+std::string Gpio::error_string(gpio_error_state gp_err)
 {
     if (gp_err.gp_code == 0)
         return std::string("No error");

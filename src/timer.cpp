@@ -1,12 +1,12 @@
-#include <edutility.h>
-#include <edtimer.h>
+#include <utility.h>
+#include <timer.h>
 #include <iostream>
 #include <string>
-#include <edutility.h>
-#include <edlogger.h>
+#include <utility.h>
+#include <logger.h>
 #include <cmath>
 
-edtimer::edtimer():
+Timer::Timer():
     m_running(false),
 	m_start(),
 	m_prev(),
@@ -17,10 +17,10 @@ edtimer::edtimer():
     m_cmode(no_shot)
 {}
 
-edtimer::~edtimer()
+Timer::~Timer()
 {}
 
-void edtimer::start()
+void Timer::start()
 {
 	m_running = true;
 	clock_gettime(CLOCK_MONOTONIC, &m_cur);
@@ -31,38 +31,38 @@ void edtimer::start()
 	m_pause = m_start;
 }
 
-std::function<void(edtimer*)> edtimer::callback()
+std::function<void(Timer*)> Timer::callback()
 {
 	return m_cb;
 }
 
-edtimer::cb_mode edtimer::callback_mode()
+Timer::cb_mode Timer::callback_mode()
 {
 	return m_cmode;
 }
 
-void edtimer::set_callback(std::function<void(edtimer*)> cb_func)
+void Timer::set_callback(std::function<void(Timer*)> cb_func)
 {
 	m_cb = cb_func;
 }
 
-double edtimer::callback_delay()
+double Timer::callback_delay()
 {
 	return to_ms_(m_cb_delay);
 }
 
-void edtimer::set_callback_mode(cb_mode mode)
+void Timer::set_callback_mode(cb_mode mode)
 {
 	m_cmode = mode;
 	m_last_cb = m_prev;
 }
 
-void edtimer::set_callback_delay(double ms)
+void Timer::set_callback_delay(double ms)
 {
 	m_cb_delay = from_ms_(ms);
 }
 
-void edtimer::update()
+void Timer::update()
 {
 	if (!m_running)
 		return;
@@ -83,35 +83,35 @@ void edtimer::update()
 	}
 }
 
-bool edtimer::paused()
+bool Timer::paused()
 {
 	return (!running() && !(m_pause == m_start));
 }
 
 
-void edtimer::stop()
+void Timer::stop()
 {
 	update();
 	m_running = false;
 }
 
-void edtimer::pause()
+void Timer::pause()
 {
 	stop();
 	clock_gettime(CLOCK_MONOTONIC, &m_pause);
 }
 
-bool edtimer::running()
+bool Timer::running()
 {
 	return m_running;
 }
 
-double edtimer::to_ms_(const timespec & tspec)
+double Timer::to_ms_(const timespec & tspec)
 {
 	return double(tspec.tv_sec) * 1000.0 + double(tspec.tv_nsec) * 0.000001;
 }
 
-timespec edtimer::from_ms_(double ms)
+timespec Timer::from_ms_(double ms)
 {
 	timespec rtn;
 	double whole, fract;
@@ -121,19 +121,19 @@ timespec edtimer::from_ms_(double ms)
 	return rtn;
 }
 
-double edtimer::dt()
+double Timer::dt()
 {
 	timespec delta = m_cur - m_prev;
 	return to_ms_(delta);
 }
 
-double edtimer::elapsed()
+double Timer::elapsed()
 {
 	timespec delta = m_cur - m_start;
 	return to_ms_(delta);
 }
 
-double edtimer::elapsed_since_callback()
+double Timer::elapsed_since_callback()
 {
 	timespec delta = m_cur - m_last_cb;
 	return to_ms_(delta);

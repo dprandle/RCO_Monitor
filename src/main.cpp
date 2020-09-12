@@ -1,11 +1,10 @@
-#include <edmctrl.h>
+#include <main_control.h>
 #include <stdlib.h>
 #include <signal.h>
 
-#include <edtimer.h>
-#include <edcallback.h>
-#include <edcomm_system.h>
-#include <edlight_system.h>
+#include <timer.h>
+#include <callback.h>
+#include <comm_system.h>
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -45,8 +44,7 @@ int32_t main(int32_t argc, char * argv[])
 			port = std::stoi(curarg.substr(6));
 	}
 	
-    edm.add_sys<edcomm_system>()->set_port(port);
-    edm.add_sys<edlight_system>();
+    edm.add_sys<Comm_System>()->set_port(port);
 	
 	edm.start();
     edm.init();

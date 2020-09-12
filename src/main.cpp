@@ -1,13 +1,13 @@
-#include <main_control.h>
 #include <stdlib.h>
 #include <signal.h>
-
-#include <timer.h>
-#include <callback.h>
-#include <comm_system.h>
-
 #include <sys/types.h>
 #include <unistd.h>
+
+#include "main_control.h"
+#include "timer.h"
+#include "callback.h"
+#include "comm_system.h"
+#include "rce_serial_comm.h"
 
 void sig_exit_handler(int signum)
 {
@@ -45,12 +45,9 @@ int32_t main(int32_t argc, char * argv[])
 	}
 	
     edm.add_sys<Comm_System>()->set_port(port);
+    edm.add_sys<RCE_Serial_Comm>();
 	
 	edm.start();
-    edm.init();
-
-    while (edm.running())
-		edm.update();
 	
     return 0;
 }

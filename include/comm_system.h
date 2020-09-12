@@ -52,7 +52,7 @@ class Comm_System : public Subsystem
 
 	virtual std::string typestr() {return TypeString();}
 	
-	static std::string TypeString() {return "edcomm_system";}
+	static std::string TypeString() {return "Comm_System";}
 
   private:
 	typedef std::vector<Socket*> ClientArray;

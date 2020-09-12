@@ -96,16 +96,21 @@ void Main_Control::rm_sys(const std::string & sysname)
 
 void Main_Control::start()
 {
-	ilog("Starting light controller");
+	ilog("Starting RCO Monitor");
 	m_running = true;
 	m_systimer->start();
+
+    init();
+    while (running())
+        update();
+    
 }
 
 void Main_Control::stop()
 {
 	
 	m_systimer->stop();
-    ilog("Stopping light controller - execution time {} ms", m_systimer->elapsed());
+    ilog("Stopping RCO Monitor - execution time {} ms", m_systimer->elapsed());
 	m_running = false;
 }
 

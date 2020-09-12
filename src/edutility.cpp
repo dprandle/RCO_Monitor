@@ -1,0 +1,96 @@
+#include <fstream>
+#include <unistd.h>
+#include <exception>
+#include <stdexcept>
+#include <edutility.h>
+#include <ctime>
+#include <iostream>
+#include <sstream>
+#include <iomanip>
+#include <edtimer.h>
+#include <edmctrl.h>
+
+
+static std::string locked_str;
+
+void delay(double ms)
+{
+	edtimer t;
+	t.start();
+    while ((t.elapsed() * 1000.0) < ms)
+		t.update();
+}
+
+uint32_t hash_id(const std::string & strng)
+{
+	uint32_t hash = 5381;
+	int32_t c;
+	const char * str = strng.c_str();
+    while ((c = *str++))
+		hash = ((hash << 5) + hash) + c;
+
+	return hash;
+}
+
+std::string timestamp()
+{
+    time_t ltime = std::time(NULL); /* calendar time */
+    std::string ret(std::asctime(std::localtime(&ltime)));
+    return ret;
+}
+
+std::string to_hex(uint8_t byte)
+{
+	std::ostringstream ostr;
+	ostr << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int32_t>(byte);
+	return ostr.str();
+}
+
+std::string to_hex(int16_t two_bytes)
+{
+	std::ostringstream ostr;
+	ostr << std::hex << std::uppercase << std::setw(4) << std::setfill('0') << static_cast<int32_t>(two_bytes);
+	return ostr.str();
+}
+
+std::string to_hex(uint16_t two_bytes)
+{
+	return to_hex(static_cast<int16_t>(two_bytes));
+}
+
+std::string to_hex(int32_t four_bytes)
+{
+	std::ostringstream ostr;
+	ostr << std::hex << std::uppercase << std::setw(4) << std::setfill('0') << four_bytes;
+	return ostr.str();	
+}
+
+std::string to_hex(uint32_t four_bytes)
+{
+	return to_hex(static_cast<int32_t>(four_bytes));
+}
+
+void zero_buf(uint8_t * buf, uint32_t size)
+{
+	for (uint32_t i = 0; i < size; ++i) {
+		buf[i] = 0;
+	}
+}
+
+void copy_buf(const uint8_t * src, uint8_t * dest, uint32_t size, uint32_t src_offset, uint32_t dest_offset)
+{
+	const uint8_t * src_with_offset = src  + src_offset;
+	uint8_t * dest_with_offset = dest + dest_offset;
+	for (uint32_t i = 0; i < size; ++i)
+		dest_with_offset[i] = src_with_offset[i];
+}
+
+void copy_buf(const int8_t * src, int8_t * dest, uint32_t size, uint32_t src_offset, uint32_t dest_offset)
+{
+    const int8_t * src_with_offset = src + src_offset;
+    int8_t * dest_with_offset = dest + dest_offset;
+    for (uint32_t i = 0; i < size; ++i)
+        dest_with_offset[i] = src_with_offset[i];
+}
+
+

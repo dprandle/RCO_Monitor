@@ -2,6 +2,10 @@
 
 #include "subsystem.h"
 
+const uint8_t COMMAND_BUFFER_SIZE = 255;
+
+class Uart;
+
 class RCE_Serial_Comm : public Subsystem
 {
   public:
@@ -17,10 +21,9 @@ class RCE_Serial_Comm : public Subsystem
 
     virtual std::string typestr();
 
-    static std::string TypeString()
-    {
-        return "RCE_Serial_Comm";
-    }
+    static std::string TypeString();
 
   private:
+    Uart * rce_uart_;
+    uint8_t command_buffer[COMMAND_BUFFER_SIZE];
 };

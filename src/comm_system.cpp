@@ -42,6 +42,7 @@ void Comm_System::init()
 
     listen(m_server_fd, 5);
     ilog("Listening on port {}", m_port);
+    Subsystem::init();
 }
 
 uint16_t Comm_System::port()
@@ -62,6 +63,7 @@ void Comm_System::release()
         m_clients.pop_back();
     }
     close(m_server_fd);
+    Subsystem::release();
 }
 
 uint32_t Comm_System::recvFromClients(uint8_t * data, uint32_t max_size)

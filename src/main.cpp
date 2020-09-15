@@ -43,7 +43,7 @@ int32_t main(int32_t argc, char * argv[])
 		if (curarg.find("-port:") == 0)
 			port = std::stoi(curarg.substr(6));
 	}
-	
+    
     edm.add_sys<Comm_System>()->set_port(port);
     edm.add_sys<RCE_Serial_Comm>();
 	

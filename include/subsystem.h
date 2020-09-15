@@ -4,20 +4,15 @@
 class Subsystem
 {
   public:
-    Subsystem()
-    {}
+    Subsystem();
 
-    virtual ~Subsystem()
-    {}
+    virtual ~Subsystem();
 
-    virtual void init()
-    {}
+    virtual void init();
 
-    virtual void release()
-    {}
+    virtual void release();
 
-    virtual void update()
-    {}
+    virtual void update();
 
     virtual std::string typestr() = 0;
 };

@@ -30,7 +30,6 @@ void Main_Control::init()
     sysmap::iterator sysiter = m_systems.begin();
     while (sysiter != m_systems.end())
     {
-        ilog("Initializing system {}", sysiter->first);
         sysiter->second->init();
         ++sysiter;
     }
@@ -49,11 +48,9 @@ bool Main_Control::running()
 
 void Main_Control::release()
 {
-    //log_message("Releasing edison control engine");
 	sysmap::iterator sysiter = m_systems.begin();
     while (sysiter != m_systems.end())
     {
-        ilog("Releasing system {}",sysiter->first);
 		sysiter->second->release();
         ++sysiter;
     }

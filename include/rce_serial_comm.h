@@ -5,6 +5,7 @@
 const uint8_t COMMAND_BUFFER_SIZE = 255;
 
 class Uart;
+class Timer;
 
 class RCE_Serial_Comm : public Subsystem
 {
@@ -25,5 +26,6 @@ class RCE_Serial_Comm : public Subsystem
 
   private:
     Uart * rce_uart_;
+    Timer * timer_;
     uint8_t command_buffer[COMMAND_BUFFER_SIZE];
 };

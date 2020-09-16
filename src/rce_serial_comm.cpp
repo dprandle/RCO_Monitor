@@ -47,8 +47,6 @@ void RCE_Serial_Comm::update()
     if (cnt > 0)
         dlog("Received string {}",cur_str);
     
-    rce_uart_->write(command_buffer, cnt);
-
     timer_->update();
 
     if (timer_->elapsed() >= 2000)

@@ -5,7 +5,9 @@
 #include "timer.h"
 
 RCE_Serial_Comm::RCE_Serial_Comm() : rce_uart_(new Uart(Uart::Uart1)), timer_(new Timer())
-{}
+{
+    command_buffer.reserve(COMMAND_BUFFER_MAX_SIZE);
+}
 
 RCE_Serial_Comm::~RCE_Serial_Comm()
 {
@@ -21,9 +23,9 @@ void RCE_Serial_Comm::init()
     df.p = Uart::None;
     df.sb = Uart::One;
     rce_uart_->set_format(df);
-    
+
     timer_->start();
-    
+
     rce_uart_->start();
     Subsystem::init();
 }
@@ -36,23 +38,26 @@ void RCE_Serial_Comm::release()
 
 void RCE_Serial_Comm::update()
 {
-    std::string cur_str;
-    static uint8_t buf[] = "DATA!";
+    static uint8_t tmp_buf[96];
+    uint32_t cnt = rce_uart_->read(tmp_buf, TMP_BUF_SIZE);
 
-    uint32_t cnt = rce_uart_->read(command_buffer, COMMAND_BUFFER_SIZE);
-    cur_str.resize(cnt);
     for (int i = 0; i < cnt; ++i)
-        cur_str[i] = command_buffer[i];
-    
-    if (cnt > 0)
-        dlog("Received string {}",cur_str);
-    
-    timer_->update();
-
-    if (timer_->elapsed() >= 2000)
     {
-        timer_->start();
-        rce_uart_->write(buf,5);
+        command_buffer.push_back(tmp_buf[i]);
+        if (command_buffer.size() > COMMAND_BUFFER_MAX_SIZE)
+        {
+            wlog("Reached max size of command buffer without command (buffer:{}) - resetting",command_buffer);
+            command_buffer.resize(0);
+        }
+    }
+    check_buffer_for_command_();
+}
+
+void RCE_Serial_Comm::check_buffer_for_command_()
+{
+    if (command_buffer.find(update_firmware_id) != std::string::npos)
+    {
+        rce_uart_->write("Found Firmware Command!",23);
     }
 }
 

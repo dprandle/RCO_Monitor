@@ -65,7 +65,7 @@ uint32_t Threaded_Fd::read(uint8_t * buffer, uint32_t max_size)
     return count;
 }
 
-uint32_t Threaded_Fd::write(uint8_t * buffer, uint32_t size, int32_t response_size)
+uint32_t Threaded_Fd::write(const uint8_t * buffer, uint32_t size, int32_t response_size)
 {
     int32_t resp = 0;
     pthread_mutex_lock(&m_send_lock);
@@ -85,6 +85,13 @@ uint32_t Threaded_Fd::write(uint8_t * buffer, uint32_t size, int32_t response_si
     pthread_mutex_unlock(&m_send_lock);
     return size;
 }
+
+uint32_t Threaded_Fd::write(const char * buffer, int32_t response_size)
+{
+    size_t sz = strlen(buffer);
+    return this->write((const uint8_t *)buffer,sz, response_size);
+}
+
 
 bool Threaded_Fd::running()
 {

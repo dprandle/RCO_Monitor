@@ -60,7 +60,9 @@ class Threaded_Fd
 
     virtual uint32_t read(uint8_t * buffer, uint32_t max_size);
 
-    virtual uint32_t write(uint8_t * buffer, uint32_t size, int32_t response_size = 0);
+    virtual uint32_t write(const uint8_t * buffer, uint32_t size, int32_t response_size = 0);
+
+    virtual uint32_t write(const char * buffer, int32_t response_size = 0);
 
 	virtual Error error();
 

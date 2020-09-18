@@ -27,6 +27,7 @@ void RCE_Serial_Comm::init()
     timer_->start();
 
     rce_uart_->start();
+    rce_uart_->write("\n\rStarting RCO_Monitor\n\r>>> ");
     Subsystem::init();
 }
 
@@ -43,21 +44,47 @@ void RCE_Serial_Comm::update()
 
     for (int i = 0; i < cnt; ++i)
     {
-        command_buffer.push_back(tmp_buf[i]);
-        if (command_buffer.size() > COMMAND_BUFFER_MAX_SIZE)
+        if (tmp_buf[i] == 127)
+        {
+            rce_uart_->write("\b \b");
+            command_buffer.pop_back();
+            continue;
+        }
+
+        if (tmp_buf[i] == '\r')
+        {
+            rce_uart_->write("\n\r");
+            check_buffer_for_command_();
+            rce_uart_->write("\n\r>>> ");
+            command_buffer.resize(0);
+            continue;
+        }
+
+
+        if (command_buffer.size() == COMMAND_BUFFER_MAX_SIZE)
         {
             wlog("Reached max size of command buffer without command (buffer:{}) - resetting",command_buffer);
+            rce_uart_->write("\n\r>>> ");
             command_buffer.resize(0);
         }
+
+        // Echo letters back
+        rce_uart_->write(&tmp_buf[i],1);
+
+        command_buffer.push_back(tmp_buf[i]);
     }
-    check_buffer_for_command_();
 }
 
 void RCE_Serial_Comm::check_buffer_for_command_()
 {
-    if (command_buffer.find(update_firmware_id) != std::string::npos)
+    if (command_buffer == update_firmware_id)
     {
-        rce_uart_->write("Found Firmware Command!",23);
+        rce_uart_->write("Found Firmware Command!");
+    }
+    else
+    {
+        std::string inv("Invalid command entered: " + command_buffer);
+        rce_uart_->write(inv.c_str());
     }
 }
 

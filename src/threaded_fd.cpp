@@ -28,18 +28,17 @@ Threaded_Fd::Threaded_Fd(uint32_t readbuf_, uint32_t writebuf_)
     m_wait_timer->set_callback_mode(Timer::single_shot);
 
     using namespace std::placeholders;
-    std::function<void(Timer *)> cb_func =
-        std::bind(&Threaded_Fd::wait_callback_func, this, _1);
+    std::function<void(Timer *)> cb_func = std::bind(&Threaded_Fd::wait_callback_func, this, _1);
     m_wait_timer->set_callback(cb_func);
 }
 
 Threaded_Fd::~Threaded_Fd()
 {
-    //if (running())
-    //{
-    stop();
-    pthread_join(m_thread, nullptr);
-    //}
+    if (running())
+    {
+        stop();
+        pthread_join(m_thread, nullptr);
+    }
     pthread_mutex_destroy(&m_send_lock);
     pthread_mutex_destroy(&m_recv_lock);
     pthread_mutex_destroy(&m_error_lock);
@@ -89,9 +88,8 @@ uint32_t Threaded_Fd::write(const uint8_t * buffer, uint32_t size, int32_t respo
 uint32_t Threaded_Fd::write(const char * buffer, int32_t response_size)
 {
     size_t sz = strlen(buffer);
-    return this->write((const uint8_t *)buffer,sz, response_size);
+    return this->write((const uint8_t *)buffer, sz, response_size);
 }
-
 
 bool Threaded_Fd::running()
 {
@@ -159,7 +157,7 @@ bool Threaded_Fd::set_fd(int32_t fd_)
 
 void Threaded_Fd::stop()
 {
-	ilog("Thread stopped by stop!");
+    ilog("Thread stopped by stop!");
     m_thread_running.clear();
 }
 

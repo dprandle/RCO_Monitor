@@ -3,9 +3,13 @@
 #include "utility.h"
 #include "logger.h"
 #include "timer.h"
+#include <string>
 
 bool Firmware_Update::process(uint8_t * buffer, uint32_t size)
 {
+    static int mult = 1;
+    static std::string prev_str = "0%";
+
     for (int i = 0; i < size; ++i)
     {
         if (current_ind < FIRMWARE_HEADER_SIZE)
@@ -16,6 +20,16 @@ bool Firmware_Update::process(uint8_t * buffer, uint32_t size)
         {
             int payload_ind = current_ind - FIRMWARE_HEADER_SIZE;
             payload[payload_ind] = buffer[i];
+            if (payload_ind > (mult * hdr.byte_size / 1000))
+            {
+                ++mult;
+                std::string bsstr;
+                for (int i = 0; i < prev_str.size(); ++i)
+                    bsstr += "\b";
+                prev_str = std::to_string(double(mult)*0.1) + "%";
+                std::string str(bsstr + prev_str);
+                rce_uart->write(str.c_str());
+            }
         }
         ++current_ind;
 
@@ -23,11 +37,20 @@ bool Firmware_Update::process(uint8_t * buffer, uint32_t size)
         if (current_ind == FIRMWARE_HEADER_SIZE)
         {
             payload.resize(hdr.byte_size);
-            std::string str("Received byte size of " + std::to_string(hdr.byte_size));
+            std::string str("Received byte size of " + std::to_string(hdr.byte_size) + "\r");
+            std::string fmw("Firmware - v" + std::to_string(hdr.v_major) + "." + std::to_string(hdr.v_minor) + "." + std::to_string(hdr.v_patch) + "\r");
+            std::string progress("Progress: " + prev_str);
             rce_uart->write(str.c_str());
+            rce_uart->write(fmw.c_str());
+            rce_uart->write(progress.c_str());
         }
         else if (current_ind == (FIRMWARE_HEADER_SIZE + hdr.byte_size))
+        {
+            current_ind = 0;
+            mult = 1;
+            prev_str = "0%";
             return true;
+        }
     }
     return false;
 }
@@ -55,7 +78,7 @@ void RCE_Serial_Comm::init()
     rce_uart_->set_format(df);
 
     rce_uart_->start();
-    rce_uart_->write("\n\rStarting RCO_Monitor\n\r>>> ");
+    rce_uart_->write("Starting RCO_Monitor\r");
     Subsystem::init();
 }
 
@@ -74,18 +97,9 @@ void RCE_Serial_Comm::update()
     {
         for (int i = 0; i < cnt; ++i)
         {
-            if (tmp_buf[i] == 127)
-            {
-                rce_uart_->write("\b \b");
-                command_buffer.pop_back();
-                continue;
-            }
-
             if (tmp_buf[i] == '\r')
             {
-                rce_uart_->write("\n\r");
                 check_buffer_for_command_();
-                rce_uart_->write("\n\r>>> ");
                 command_buffer.resize(0);
                 continue;
             }
@@ -93,12 +107,9 @@ void RCE_Serial_Comm::update()
             if (command_buffer.size() == COMMAND_BUFFER_MAX_SIZE)
             {
                 wlog("Reached max size of command buffer without command (buffer:{}) - resetting", command_buffer);
-                rce_uart_->write("\n\r>>> ");
+                rce_uart_->write("\r");
                 command_buffer.resize(0);
             }
-
-            // Echo letters back
-            rce_uart_->write(&tmp_buf[i], 1);
 
             command_buffer.push_back(tmp_buf[i]);
         }
@@ -110,9 +121,9 @@ void RCE_Serial_Comm::update()
         {
             if (handler->process(tmp_buf, cnt))
             {
-                std::string msg = "\n\rCommand: " + current_command + " complete\n\r";
-                current_command.clear();
+                std::string msg = "\rCommand: " + current_command + " complete\r\n";
                 rce_uart_->write(msg.c_str());
+                current_command.clear();
             }
         }
         else
@@ -148,12 +159,12 @@ void RCE_Serial_Comm::check_buffer_for_command_()
     if (handler)
     {
         current_command = command_buffer;
-        std::string inv("Executing command: " + command_buffer);
+        std::string inv("Executing command: " + command_buffer + "...\r");
         rce_uart_->write(inv.c_str());
     }
     else
     {
-        std::string inv("Invalid command entered: " + command_buffer);
+        std::string inv("Invalid command entered: " + command_buffer + "\r");
         rce_uart_->write(inv.c_str());
     }
 }

@@ -1,7 +1,4 @@
-#include <stdlib.h>
 #include <signal.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 #include "main_control.h"
 #include "timer.h"

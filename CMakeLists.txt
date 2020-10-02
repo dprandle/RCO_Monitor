@@ -35,6 +35,13 @@ add_definitions(-DCURRENT_VERSION_MAJOR=${CURRENT_VERSION_MAJOR})
 add_definitions(-DCURRENT_VERSION_MINOR=${CURRENT_VERSION_MINOR})
 add_definitions(-DCURRENT_VERSION_PATCH=${CURRENT_VERSION_PATCH})
 
+# when building, don't use the install RPATH already
+# (but later on when installing)
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH true)
+
+# # the RPATH to be used when installing
+SET(CMAKE_INSTALL_RPATH "/home/ubuntu/bin/spdlog")
+
 # Set the src files for the project
 file(GLOB SRC_FILES "${LIGHTCTRL_SRC_DIR}/*.c*")
 

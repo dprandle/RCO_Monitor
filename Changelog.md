@@ -11,3 +11,4 @@ Format for version is major.minor.patch, where 0 is reserved in minor for alpha 
 - Upload new versions of firmware enabled
 - Basic timeouts enabled for link down in the middle of one of the above operations
 - Program enabled as service - starts on raspberry pi reboot and auto restarts if there is a crash
+- Changed RPATH so spdlog works

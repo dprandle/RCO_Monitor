@@ -17,3 +17,7 @@ struct Firmware_Header
         };
     };
 };
+
+void parse_filename(const char * fname,Firmware_Header & to_fill);
+
+char * parse_firmware_header(const Firmware_Header & fmh);

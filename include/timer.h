@@ -4,15 +4,6 @@
 #include <inttypes.h>
 #include <functional>
 
-//! class edtimer 
-/*! 
-  This class keeps track of time allowing you to start, stop, and continue the timer.
-  It also has a "dt" functionality to allow you to see how much time has elapsed since
-  the last update call. This could be useful for various things.
-
-  You can also set up the timer to execute a callback every so often (every so many milliseconds) or you can
-  set it to execute once after some delay.
- */
 class Timer
 {
   public:

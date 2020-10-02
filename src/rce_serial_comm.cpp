@@ -1,15 +1,17 @@
+#include <cstring>
+#include <sys/stat.h>
+
+#include "main_control.h"
 #include "rce_serial_comm.h"
+#include "shared_structs.h"
 #include "uart.h"
-#include "utility.h"
 #include "logger.h"
 #include "timer.h"
-#include <string>
 
 bool Firmware_Update::process(uint8_t * buffer, uint32_t size)
 {
-    static int mult = 1;
-    static std::string prev_str = "0%";
-
+    static uint8_t mult = 0;
+    static uint8_t to_send = 0;
     for (int i = 0; i < size; ++i)
     {
         if (current_ind < FIRMWARE_HEADER_SIZE)
@@ -20,15 +22,13 @@ bool Firmware_Update::process(uint8_t * buffer, uint32_t size)
         {
             int payload_ind = current_ind - FIRMWARE_HEADER_SIZE;
             payload[payload_ind] = buffer[i];
-            if (payload_ind > (mult * hdr.byte_size / 1000))
+            if (payload_ind > (mult * hdr.byte_size / 100))
             {
+                // Never send a newline or carraige return character - those indicate end of transmission
+                to_send = mult + 32;
+                ilog("Downloading ({}%) - actual sent byte {}",mult,to_send);
+                rce_uart->write(&to_send,1);
                 ++mult;
-                std::string bsstr;
-                for (int i = 0; i < prev_str.size(); ++i)
-                    bsstr += "\b";
-                prev_str = std::to_string(double(mult)*0.1) + "%";
-                std::string str(bsstr + prev_str);
-                rce_uart->write(str.c_str());
             }
         }
         ++current_ind;
@@ -36,39 +36,97 @@ bool Firmware_Update::process(uint8_t * buffer, uint32_t size)
         // This means we need to resize the payload!
         if (current_ind == FIRMWARE_HEADER_SIZE)
         {
-            payload.resize(hdr.byte_size);
-            std::string str("Received byte size of " + std::to_string(hdr.byte_size) + "\r");
-            std::string fmw("Firmware - v" + std::to_string(hdr.v_major) + "." + std::to_string(hdr.v_minor) + "." + std::to_string(hdr.v_patch) + "\r");
-            std::string progress("Progress: " + prev_str);
-            rce_uart->write(str.c_str());
-            rce_uart->write(fmw.c_str());
-            rce_uart->write(progress.c_str());
+            payload = (uint8_t *)malloc(hdr.byte_size);
+            memset(payload,0,hdr.byte_size);
+            //rce_uart->write("Received firmware header\r");
+            ilog("Received header for firmware {} - resize payload to {} bytes",parse_firmware_header(hdr), hdr.byte_size);
+            if (hdr.byte_size == 0)
+            {
+                wlog("Byte size for firmware sent was 0 - likely error - exiting firmware download mode");
+                return true;
+            }
         }
         else if (current_ind == (FIRMWARE_HEADER_SIZE + hdr.byte_size))
         {
+            char * path = parse_firmware_header(hdr);
+            util::save_data_to_file(payload, hdr.byte_size, path, S_IRWXU);
+            rce_uart->write("Successfully uploaded firmware to ");
+            rce_uart->write(path);
+
             current_ind = 0;
-            mult = 1;
-            prev_str = "0%";
+            mult = 0;
+            hdr = Firmware_Header();
+            free(payload);
+            payload = nullptr;
             return true;
         }
     }
     return false;
 }
 
-RCE_Serial_Comm::RCE_Serial_Comm() : rce_uart_(new Uart(Uart::Uart1))
+bool Reboot_Updated_Firmware::process(uint8_t * buffer, uint32_t size)
 {
-    command_buffer.reserve(COMMAND_BUFFER_MAX_SIZE);
+    for (int i = 0; i < size; ++i)
+    {
+        hdr.data[current_ind] = buffer[i];
+        ++current_ind;
+        if (current_ind == FIRMWARE_HEADER_SIZE)
+        {
+            current_ind = 0;
+            const char * params[2] = {"-port=10000",nullptr};
+            char * fwh_str = parse_firmware_header(hdr);
+            ilog("Received reboot command - rebooting in to {}",fwh_str);
+            edm.restart_updated(parse_firmware_header(hdr), params);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Get_Firmware_Versions::process(uint8_t * cmd_buffer, uint32_t size)
+{   
+    char ** buffer = nullptr;
+    uint8_t cnt = util::filenames_in_dir("/home/ubuntu/bin",buffer);
+    rce_uart->write(&cnt,1);
+    ilog("Found {} versions of firmware...",cnt);
+    for (int i = 0; i < cnt; ++i)
+    {
+        Firmware_Header hdr;
+        parse_filename(buffer[i],hdr);
+        if (hdr.v_major == CURRENT_VERSION_MAJOR && hdr.v_minor == CURRENT_VERSION_MINOR && hdr.v_patch == CURRENT_VERSION_PATCH)
+            hdr.byte_size = 1;
+        ilog("Sending back firmware {}",buffer[i]);
+        rce_uart->write(hdr.data,FIRMWARE_HEADER_SIZE);
+    }
+    free(buffer);
+    return true;
+}
+
+RCE_Serial_Comm::RCE_Serial_Comm() : reset_timer_(new Timer), rce_uart_(new Uart(Uart::Uart1))
+{
+    memset(current_command, 0, COMMAND_BUFFER_MAX_SIZE);
+    memset(command_buffer, 0, COMMAND_BUFFER_MAX_SIZE);
+    memset(command_handlers_, 0, MAX_COMMAND_COUNT);
 }
 
 RCE_Serial_Comm::~RCE_Serial_Comm()
 {
+    for (int i = 0; i < MAX_COMMAND_COUNT; ++i)
+    {
+        if (command_handlers_[i])
+            delete command_handlers_[i];
+        command_handlers_[i] = nullptr;
+    }
+    delete reset_timer_;
     delete rce_uart_;
 }
 
 void RCE_Serial_Comm::init()
 {
     // Create the default commands
+    add_command<Reboot_Updated_Firmware>("RBUFW");
     add_command<Firmware_Update>("FWU");
+    add_command<Get_Firmware_Versions>("GFV");
 
     rce_uart_->set_baud(Uart::b9600);
     Uart::DataFormat df;
@@ -78,7 +136,7 @@ void RCE_Serial_Comm::init()
     rce_uart_->set_format(df);
 
     rce_uart_->start();
-    rce_uart_->write("Starting RCO_Monitor\r");
+    rce_uart_->write("Starting RCO Monitor\r");
     Subsystem::init();
 }
 
@@ -93,88 +151,98 @@ void RCE_Serial_Comm::update()
     static uint8_t tmp_buf[96];
     uint32_t cnt = rce_uart_->read(tmp_buf, TMP_BUF_SIZE);
 
-    if (current_command.empty())
+    if (util::buf_len(current_command, COMMAND_BUFFER_MAX_SIZE) == 0)
     {
         for (int i = 0; i < cnt; ++i)
         {
             if (tmp_buf[i] == '\r')
             {
                 check_buffer_for_command_();
-                command_buffer.resize(0);
+                memset(command_buffer, 0, COMMAND_BUFFER_MAX_SIZE);
                 continue;
             }
 
-            if (command_buffer.size() == COMMAND_BUFFER_MAX_SIZE)
+            uint32_t cur_ind = util::buf_len(command_buffer, COMMAND_BUFFER_MAX_SIZE);
+            if (cur_ind == COMMAND_BUFFER_MAX_SIZE)
             {
                 wlog("Reached max size of command buffer without command (buffer:{}) - resetting", command_buffer);
                 rce_uart_->write("\r");
-                command_buffer.resize(0);
+                memset(command_buffer, 0, COMMAND_BUFFER_MAX_SIZE);
             }
-
-            command_buffer.push_back(tmp_buf[i]);
+            command_buffer[cur_ind] = tmp_buf[i];
         }
     }
     else
     {
         Command_Handler * handler = get_command(current_command);
+        reset_timer_->update();
+        if (cnt >= 1)
+            reset_timer_->start();
+        
         if (handler)
         {
             if (handler->process(tmp_buf, cnt))
             {
-                std::string msg = "\rCommand: " + current_command + " complete\r\n";
-                rce_uart_->write(msg.c_str());
-                current_command.clear();
+                rce_uart_->write("\rCommand: ");
+                rce_uart_->write(current_command);
+                rce_uart_->write(" complete\r\n");
+                ilog("Command {} complete",current_command);
+                memset(current_command, 0, COMMAND_BUFFER_MAX_SIZE);
+                reset_timer_->stop();
+            }
+            else if (reset_timer_->elapsed() > MAX_TIMEOUT_MS)
+            {
+                ilog("Connection for command {} timed out - resetting", current_command);
+                reset_timer_->stop();
+                memset(current_command, 0, COMMAND_BUFFER_MAX_SIZE);
             }
         }
         else
         {
-            current_command.clear();
+            memset(current_command, 0, COMMAND_BUFFER_MAX_SIZE);
         }
     }
 }
 
-Command_Handler * RCE_Serial_Comm::get_command(const std::string & command)
+Command_Handler * RCE_Serial_Comm::get_command(const char * command)
 {
-    auto fiter = command_handlers_.find(command);
-    if (fiter != command_handlers_.end())
-        return fiter->second;
+    uint32_t buf_len = util::buf_len(command_handlers_, MAX_COMMAND_COUNT);
+    for (uint32_t i = 0; i < buf_len; ++i)
+    {
+        if (strcmp(command_handlers_[i]->command, command) == 0)
+            return command_handlers_[i];
+    }
     return nullptr;
 }
 
-bool RCE_Serial_Comm::remove_command(const std::string & command)
-{
-    auto fiter = command_handlers_.find(command);
-    if (fiter != command_handlers_.end())
-    {
-        delete fiter->second;
-        command_handlers_.erase(fiter);
-        return true;
-    }
-    return false;
-}
 
 void RCE_Serial_Comm::check_buffer_for_command_()
 {
     Command_Handler * handler = get_command(command_buffer);
     if (handler)
     {
-        current_command = command_buffer;
-        std::string inv("Executing command: " + command_buffer + "...\r");
-        rce_uart_->write(inv.c_str());
+        strcpy(current_command, command_buffer);
+        rce_uart_->write("Executing command: ");
+        rce_uart_->write(current_command);
+        rce_uart_->write("...\r");
+        ilog("Recieved command: {} - executing...",current_command);
+        reset_timer_->start();
     }
     else
     {
-        std::string inv("Invalid command entered: " + command_buffer + "\r");
-        rce_uart_->write(inv.c_str());
+        rce_uart_->write("Invalid command entered: ");
+        rce_uart_->write(command_buffer);
+        rce_uart_->write("\r");
+        wlog("Invalid command recieved: {}",command_buffer);
     }
 }
 
-std::string RCE_Serial_Comm::typestr()
+const char * RCE_Serial_Comm::typestr()
 {
     return TypeString();
 }
 
-std::string RCE_Serial_Comm::TypeString()
+const char * RCE_Serial_Comm::TypeString()
 {
     return "RCE_Serial_Comm";
 }

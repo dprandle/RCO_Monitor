@@ -1,41 +1,46 @@
 #pragma once
 
-#include <iostream>
-#include <string>
-#include <sstream>
-#include <pthread.h>
+#include <bits/stdint-intn.h>
+#include <inttypes.h>
 
 namespace util
 {
 
-uint32_t hash_id(const std::string & to_hash);
+bool save_data_to_file(uint8_t * data, uint32_t size, const char * fname, int mode_flags);
 
-std::string timestamp();
+uint32_t hash_id(const char * to_hash);
 
 void delay(double ms);
 
-std::string to_hex(uint8_t byte);
+/// Get the count of files in the dir - ignores . and ..
+uint16_t files_in_dir(const char * dir);
 
-std::string to_hex(int16_t two_bytes);
+/// Fill the buffer with all file names from dir - ignores . and ..
+/// Returns the size of the char* buffer with each element being a null terminated string
+uint16_t filenames_in_dir(const char * dir, char ** & buffer);
 
-std::string to_hex(uint16_t two_bytes);
+template<class T>
+void zero_buf(T * buf, uint32_t size)
+{
+    for (uint32_t i = 0; i < size; ++i)
+        buf[i] = 0;
+}
 
-std::string to_hex(int32_t four_bytes);
+template <class T>
+void copy_buf(const T * src, T * dest, uint32_t size, uint32_t src_offset=0, uint32_t dest_offset=0)
+{
+    const T * src_with_offset = src + src_offset;
+    T * dest_with_offset = dest + dest_offset;
+    for (uint32_t i = 0; i < size; ++i)
+        dest_with_offset[i] = src_with_offset[i];
+}
 
-std::string to_hex(uint32_t four_bytes);
-
-void zero_buf(uint8_t * buf, uint32_t size);
-
-//! Copy buffer
-/*! Copy the source buffer to destination buffer with possible offsets in each buffer
-  
-  \param src The source buffer
-  \param dest The destination buffer
-  \param size Amount of items to copy
-  \param src_offset Offset in to the source buffer (defaults to 0)
-  \param dest_offset Offset in to the destination buffer (defaults to 0)
-*/
-void copy_buf(const uint8_t * src, uint8_t * dest, uint32_t size, uint32_t src_offset=0, uint32_t dest_offset=0);
-
-void copy_buf(const int8_t * src, int8_t * dest, uint32_t size, uint32_t src_offset=0, uint32_t dest_offset=0);
+template <class T>
+uint32_t buf_len(const T * buf, uint32_t max_len=-1)
+{
+    int ind = 0;
+    while (buf[ind] && ind != max_len)
+        ++ind;
+    return ind;
+}
 }

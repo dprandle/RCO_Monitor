@@ -1,97 +1,96 @@
-#include <fstream>
 #include <unistd.h>
-#include <exception>
-#include <stdexcept>
-#include <utility.h>
-#include <ctime>
-#include <iostream>
-#include <sstream>
-#include <iomanip>
-#include <timer.h>
-#include <main_control.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <dirent.h>
+
+#include "logger.h"
+#include "utility.h"
+#include "timer.h"
 
 namespace util
 {
 static std::string locked_str;
 
+bool save_data_to_file(uint8_t * data, uint32_t size, const char * fname, int mode_flags)
+{
+    int fd = open(fname, O_RDWR | O_CREAT, mode_flags);
+    if (fd != -1)
+    {
+        ilog("Saving {} bytes to {}", size, fname);
+        write(fd, data, size);
+        close(fd);
+        return true;
+    }
+    else
+    {
+        wlog("Unable to open file {} - error: {}", fname, strerror(errno));
+        return false;
+    }
+    return 0;
+}
+
 void delay(double ms)
 {
-	Timer t;
-	t.start();
+    Timer t;
+    t.start();
     while ((t.elapsed() * 1000.0) < ms)
-		t.update();
+        t.update();
 }
 
-uint32_t hash_id(const std::string & strng)
+uint16_t files_in_dir(const char * dirname)
 {
-	uint32_t hash = 5381;
-	int32_t c;
-	const char * str = strng.c_str();
+    uint16_t count = 0;
+    DIR * dir = opendir(dirname);
+    dirent * ent;
+    if (dir)
+    {
+        while ((ent = readdir(dir)))
+        {
+            if (ent->d_type == DT_REG)
+                ++count;
+        }
+        closedir(dir);
+    }
+    else
+    {
+        wlog("Could not open directory {}",dirname);
+    }
+    return count;
+}
+
+uint16_t filenames_in_dir(const char * dirname, char ** & buffer)
+{
+    uint16_t file_cnt = files_in_dir(dirname);
+    if (file_cnt == 0)
+        return file_cnt;
+    
+    DIR * dir = opendir(dirname);
+    dirent * ent;
+    buffer = (char**)malloc(file_cnt * sizeof(char*));
+    
+    uint16_t ind = 0;
+    while ((ent = readdir(dir)))
+    {    
+        if (ent->d_type == DT_REG)
+        {
+            uint32_t name_len = strlen(ent->d_name);
+            buffer[ind] = (char*)malloc(strlen(ent->d_name) + 1);
+            strcpy(buffer[ind],ent->d_name);
+            ++ind;
+        }
+    }
+    closedir(dir);
+    return file_cnt;
+}
+
+uint32_t hash_id(const char * str)
+{
+    uint32_t hash = 5381;
+    int32_t c;
     while ((c = *str++))
-		hash = ((hash << 5) + hash) + c;
-
-	return hash;
+        hash = ((hash << 5) + hash) + c;
+    return hash;
 }
 
-std::string timestamp()
-{
-    time_t ltime = std::time(NULL); /* calendar time */
-    std::string ret(std::asctime(std::localtime(&ltime)));
-    return ret;
-}
-
-std::string to_hex(uint8_t byte)
-{
-	std::ostringstream ostr;
-	ostr << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int32_t>(byte);
-	return ostr.str();
-}
-
-std::string to_hex(int16_t two_bytes)
-{
-	std::ostringstream ostr;
-	ostr << std::hex << std::uppercase << std::setw(4) << std::setfill('0') << static_cast<int32_t>(two_bytes);
-	return ostr.str();
-}
-
-std::string to_hex(uint16_t two_bytes)
-{
-	return to_hex(static_cast<int16_t>(two_bytes));
-}
-
-std::string to_hex(int32_t four_bytes)
-{
-	std::ostringstream ostr;
-	ostr << std::hex << std::uppercase << std::setw(4) << std::setfill('0') << four_bytes;
-	return ostr.str();	
-}
-
-std::string to_hex(uint32_t four_bytes)
-{
-	return to_hex(static_cast<int32_t>(four_bytes));
-}
-
-void zero_buf(uint8_t * buf, uint32_t size)
-{
-	for (uint32_t i = 0; i < size; ++i) {
-		buf[i] = 0;
-	}
-}
-
-void copy_buf(const uint8_t * src, uint8_t * dest, uint32_t size, uint32_t src_offset, uint32_t dest_offset)
-{
-	const uint8_t * src_with_offset = src  + src_offset;
-	uint8_t * dest_with_offset = dest + dest_offset;
-	for (uint32_t i = 0; i < size; ++i)
-		dest_with_offset[i] = src_with_offset[i];
-}
-
-void copy_buf(const int8_t * src, int8_t * dest, uint32_t size, uint32_t src_offset, uint32_t dest_offset)
-{
-    const int8_t * src_with_offset = src + src_offset;
-    int8_t * dest_with_offset = dest + dest_offset;
-    for (uint32_t i = 0; i < size; ++i)
-        dest_with_offset[i] = src_with_offset[i];
-}
-
-}
+} // namespace util

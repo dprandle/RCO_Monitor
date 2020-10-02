@@ -25,5 +25,6 @@ class Logger
     void terminate();
 
   private:
+    bool initialized;
     std::shared_ptr<spdlog::logger> logger_;
 };

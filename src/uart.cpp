@@ -1,9 +1,6 @@
-#include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <termios.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <errno.h>
 
 #include "utility.h"

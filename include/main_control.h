@@ -1,15 +1,15 @@
 #pragma once
 
-#include <string>
-#include <map>
-#include <logger.h>
-
 #define edm Main_Control::inst()
+
+#include <inttypes.h>
+
+const uint32_t MAX_SYSTEM_COUNT = 10;
 
 class Subsystem;
 class Timer;
+class Logger;
 
-typedef std::map<std::string,Subsystem*> sysmap;
 
 class Main_Control
 {
@@ -18,18 +18,18 @@ class Main_Control
     virtual ~Main_Control();
     
     template<class T>
-    T * add_sys()
+    T * add_subsystem()
     {
         T * sys = new T();
-        std::pair<sysmap::iterator,bool> ret = m_systems.insert(std::pair<std::string,Subsystem*>(sys->typestr(), sys));
-        if (!ret.second)
+        if (add_subsystem(sys) == -1)
         {
-            wlog("Could not add system {}",sys->typestr());
             delete sys;
-            return NULL;
+            return nullptr;
         }
         return sys;
     }
+
+    int add_subsystem(Subsystem * subsys);
 
     static Main_Control & inst();
 
@@ -38,6 +38,8 @@ class Main_Control
 	void init();
 	
     void release();
+
+    void restart_updated(const char * exe_path, const char * const params[]);
 
     void start();
 
@@ -48,26 +50,24 @@ class Main_Control
     void update();
     
     template<class T>
-    void rm_sys()
+    void remove_subsystem()
     {
-        rm_sys(T::TypeString());
+        remove_subsystem(T::TypeString());
     }
 
-    void rm_sys(const std::string & sysname);
+    void remove_subsystem(const char * sysname);
 
     template<class T>
-    T * sys()
+    T * get_subsystem()
     {
-        return static_cast<T*>(sys(T::TypeString()));
+        return static_cast<T*>(get_subsystem(T::TypeString()));
     }
 
-    Subsystem * sys(const std::string & sysname);
-
-	static void quit(void);
+    Subsystem * get_subsystem(const char * sysname);
     
   private:
     bool m_running;
-    sysmap m_systems;
+    Subsystem * systems_[MAX_SYSTEM_COUNT];
 	Timer * m_systimer;
-    Logger m_logger;
+    Logger * logger_;
 };

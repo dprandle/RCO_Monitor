@@ -1,5 +1,4 @@
 #pragma once
-#include <string>
 
 class Subsystem
 {
@@ -14,5 +13,5 @@ class Subsystem
 
     virtual void update();
 
-    virtual std::string typestr() = 0;
+    virtual const char * typestr() = 0;
 };

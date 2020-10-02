@@ -1,10 +1,10 @@
-#include <utility.h>
-#include <timer.h>
 #include <iostream>
 #include <string>
 #include <utility.h>
 #include <logger.h>
-#include <cmath>
+
+#include "utility.h"
+#include "timer.h"
 
 Timer::Timer():
     m_running(false),

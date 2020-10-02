@@ -1,0 +1,39 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Launch Target",
+            "type": "shell",
+            "command": "${command:cmake.launchTargetPath}",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "showReuseMessage": true,
+                "clear": true,
+                "focus": true
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Enable Systemd Service",
+            "type": "shell",
+            "command": "sudo systemctl link ~/Documents/Code/RCO_Monitor/systemd/RCO_Monitor.service && sudo systemctl enable RCO_Monitor",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "showReuseMessage": true,
+                "clear": true,
+                "focus": true
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        }
+    ]
+}

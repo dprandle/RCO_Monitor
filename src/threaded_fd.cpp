@@ -1,13 +1,14 @@
-#include <threaded_fd.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <utility.h>
 #include <errno.h>
-#include <timer.h>
-#include <callback.h>
+#include "timer.h"
 #include <string.h>
-#include <logger.h>
+
+#include "callback.h"
+#include "threaded_fd.h"
+#include "utility.h"
+#include "logger.h"
 
 Threaded_Fd::Threaded_Fd(uint32_t readbuf_, uint32_t writebuf_)
     : m_fd(-1),
@@ -15,14 +16,16 @@ Threaded_Fd::Threaded_Fd(uint32_t readbuf_, uint32_t writebuf_)
       m_read_curindex(0),
       m_write_rawindex(0),
       m_write_curindex(0),
+      write_buf_size_(writebuf_),
+      read_buf_size_(readbuf_),
       m_current_wait_for_byte_count(0),
       m_wait_timer(new Timer())
 {
     pthread_mutex_init(&m_send_lock, nullptr);
     pthread_mutex_init(&m_recv_lock, nullptr);
     pthread_mutex_init(&m_error_lock, nullptr);
-    m_read_buffer.resize(readbuf_, 0);
-    m_write_buffer.resize(writebuf_);
+    m_read_buffer = (uint8_t*)malloc(read_buf_size_);
+    m_write_buffer = (WriteVal*)malloc(write_buf_size_*sizeof(WriteVal));
 
     m_wait_timer->set_callback_delay(COMMAND_WAIT_DELAY);
     m_wait_timer->set_callback_mode(Timer::single_shot);
@@ -42,6 +45,8 @@ Threaded_Fd::~Threaded_Fd()
     pthread_mutex_destroy(&m_send_lock);
     pthread_mutex_destroy(&m_recv_lock);
     pthread_mutex_destroy(&m_error_lock);
+    free(m_read_buffer);
+    free(m_write_buffer);
     delete m_wait_timer;
     close(m_fd);
 }
@@ -55,7 +60,7 @@ uint32_t Threaded_Fd::read(uint8_t * buffer, uint32_t max_size)
         buffer[count] = m_read_buffer[m_read_curindex];
         ++count;
         ++m_read_curindex;
-        if (m_read_curindex == m_read_buffer.size())
+        if (m_read_curindex == read_buf_size_)
             m_read_curindex = 0;
         if (count == max_size)
             break;
@@ -68,8 +73,8 @@ uint32_t Threaded_Fd::write(const uint8_t * buffer, uint32_t size, int32_t respo
 {
     int32_t resp = 0;
     pthread_mutex_lock(&m_send_lock);
-    if (size > m_write_buffer.size())
-        size = m_write_buffer.size();
+    if (size > write_buf_size_)
+        size = write_buf_size_;
     for (uint32_t i = 0; i < size; ++i)
     {
         if (i == size - 1)
@@ -78,7 +83,7 @@ uint32_t Threaded_Fd::write(const uint8_t * buffer, uint32_t size, int32_t respo
         ++m_write_curindex;
         if (m_write_curindex == m_write_rawindex)
             size = i;
-        if (m_write_curindex == m_write_buffer.size())
+        if (m_write_curindex == write_buf_size_)
             m_write_curindex = 0;
     }
     pthread_mutex_unlock(&m_send_lock);
@@ -186,7 +191,7 @@ void Threaded_Fd::_do_read()
                 m_wait_timer->stop();
         }
 
-        if (m_read_rawindex == m_read_buffer.size())
+        if (m_read_rawindex == read_buf_size_)
             m_read_rawindex = 0;
 
         // This check may go away eventually
@@ -215,7 +220,7 @@ void Threaded_Fd::_do_write()
         ++m_write_rawindex;
         ++tosend;
 
-        if (m_write_rawindex == m_write_buffer.size())
+        if (m_write_rawindex == write_buf_size_)
             m_write_rawindex = 0;
 
         if (m_current_wait_for_byte_count > 0)
@@ -251,7 +256,6 @@ void Threaded_Fd::_exec()
             _do_write();
         _do_read();
     }
-    ilog("Ending thread...");
 }
 
 void * Threaded_Fd::thread_exec(void * _this)

@@ -3,27 +3,12 @@
 #include "main_control.h"
 #include "timer.h"
 #include "callback.h"
-#include "comm_system.h"
 #include "rce_serial_comm.h"
+#include "logger.h"
 
 void sig_exit_handler(int signum)
 {
-    std::string msg("Cought signal ");
-    switch (signum)
-    {
-    case(SIGTERM):
-        msg += "sigterm";
-        break;
-    case(SIGINT):
-        msg += "sigint";
-        break;
-    case(SIGKILL):
-        msg += "sigkill";
-        break;
-    default:
-        return;
-    }
-    edm.quit();
+    edm.stop();
     exit(0);
 }
 
@@ -41,9 +26,7 @@ int32_t main(int32_t argc, char * argv[])
 			port = std::stoi(curarg.substr(6));
 	}
     
-    edm.add_sys<Comm_System>()->set_port(port);
-    edm.add_sys<RCE_Serial_Comm>();
-	
+    edm.add_subsystem<RCE_Serial_Comm>();
 	edm.start();
 	
     return 0;

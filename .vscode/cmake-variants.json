@@ -1,0 +1,27 @@
+{
+    "buildVariant": {
+        "default": "debug",
+        "choices": {
+            "debug": {
+                "buildType": "Debug",
+                "linkage": "shared",
+                "short": "Debug",
+                "long": "Build with debug symbols",
+                "settings": {
+                    "SPDLOG_BUILD_SHARED":true,
+                    "SPDLOG_NO_EXCEPTIONS":true
+                }
+            },
+            "release": {
+                "buildType": "Release",
+                "linkage": "shared",
+                "short": "Release",
+                "long": "Build without debug symbols",
+                "settings": {
+                    "SPDLOG_BUILD_SHARED":true,
+                    "SPDLOG_NO_EXCEPTIONS":true
+                }
+            }
+        }
+    }
+}

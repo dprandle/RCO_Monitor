@@ -1,23 +1,22 @@
 #pragma once
 
-#include <map>
-#include <vector>
-
 #include "shared_structs.h"
 #include "subsystem.h"
+#include "utility.h"
 
 
 const uint8_t TMP_BUF_SIZE = 96;
 const uint8_t COMMAND_BUFFER_MAX_SIZE = 20;
+const int32_t MAX_COMMAND_COUNT = 20;
+const int16_t MAX_TIMEOUT_MS = 10000;
 
 class Uart;
 class Timer;
 
-
 /// Subclass this and override process in order to register a new Uart command
 struct Command_Handler
 {
-    Command_Handler()
+    Command_Handler():rce_uart(nullptr)
     {}
 
     virtual ~Command_Handler()
@@ -26,15 +25,38 @@ struct Command_Handler
     virtual bool process(uint8_t * buffer, uint32_t size) = 0;
 
     Uart * rce_uart;
+
+    char command[COMMAND_BUFFER_MAX_SIZE];
 };
 
 struct Firmware_Update : public Command_Handler
 {
+    Firmware_Update():Command_Handler(), hdr(),current_ind() {}
+    
+    bool process(uint8_t * buffer, uint32_t size);
+    
+    Firmware_Header hdr;
+    
+    uint32_t current_ind;
+    
+    uint8_t * payload;
+};
+
+struct Reboot_Updated_Firmware : public Command_Handler
+{
+    Reboot_Updated_Firmware():Command_Handler(), hdr(), current_ind(0) {}
+
     bool process(uint8_t * buffer, uint32_t size);
     Firmware_Header hdr;
     uint32_t current_ind;
-    std::vector<uint8_t> payload;
 };
+
+struct Get_Firmware_Versions : public Command_Handler
+{
+    Get_Firmware_Versions():Command_Handler() {}  
+    bool process(uint8_t * buffer, uint32_t size);
+};
+
 
 class RCE_Serial_Comm : public Subsystem
 {
@@ -50,32 +72,42 @@ class RCE_Serial_Comm : public Subsystem
     void update();
 
     template<class T>
-    T * add_command(const std::string & command)
+    T * add_command(const char * command)
     {
-        T * handler = new T;
+        uint32_t cur_ind = util::buf_len(command_handlers_, MAX_COMMAND_COUNT);
+        
+        if (cur_ind == MAX_COMMAND_COUNT)
+            return nullptr;
+        
+        T * handler = static_cast<T*>(new T);
         handler->rce_uart = rce_uart_;
-        auto ins_iter = command_handlers_.emplace(command, handler);
-        if (ins_iter.second)
-            return handler;
-        return nullptr;
+        strcpy(handler->command, command);
+        command_handlers_[cur_ind] = handler;
+        return handler;
     }
 
-    Command_Handler * get_command(const std::string & command);
+    template<class T>
+    T * command(const char * command)
+    {
+        return static_cast<T*>(get_command(command));
+    }
 
-    bool remove_command(const std::string & command);
+    Command_Handler * get_command(const char * command);
 
-    std::string typestr();
+    const char * typestr();
 
-    static std::string TypeString();
+    static const char * TypeString();
 
   private:
     void check_buffer_for_command_();
 
+    Timer * reset_timer_;
+
     Uart * rce_uart_;
 
-    std::string current_command;
+    char current_command[COMMAND_BUFFER_MAX_SIZE];
 
-    std::string command_buffer;
+    char command_buffer[COMMAND_BUFFER_MAX_SIZE];
 
-    std::map<std::string, Command_Handler *> command_handlers_;
+    Command_Handler * command_handlers_[MAX_COMMAND_COUNT];
 };

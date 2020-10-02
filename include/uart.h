@@ -2,7 +2,6 @@
 
 #include <termios.h>
 #include <threaded_fd.h>
-#include <string>
 
 class Uart : public Threaded_Fd
 {

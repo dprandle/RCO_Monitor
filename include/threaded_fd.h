@@ -101,8 +101,11 @@ class Threaded_Fd
 	uint32_t m_write_rawindex;
 	uint32_t m_write_curindex;
 	
-	std::vector<WriteVal> m_write_buffer;
-	std::vector<uint8_t> m_read_buffer;
+	WriteVal * m_write_buffer;
+	uint8_t * m_read_buffer;
+    uint32_t write_buf_size_;
+    uint32_t read_buf_size_;
+
 
 	Error m_err;
 

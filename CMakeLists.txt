@@ -16,9 +16,6 @@ set(TARGET_NAME "RCO_Monitor-v${CURRENT_VERSION_MAJOR}.${CURRENT_VERSION_MINOR}.
 # Set the source directory
 set(LIGHTCTRL_SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 
-# Set the include directory
-set(LIGHTCTRL_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
-
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_DEBUG_POSTFIX d)
@@ -39,7 +36,7 @@ add_definitions(-DCURRENT_VERSION_PATCH=${CURRENT_VERSION_PATCH})
 # (but later on when installing)
 SET(CMAKE_BUILD_WITH_INSTALL_RPATH true)
 
-# # the RPATH to be used when installing
+# the RPATH to be used when installing
 SET(CMAKE_INSTALL_RPATH "/home/ubuntu/bin/spdlog")
 
 # Set the src files for the project
@@ -47,7 +44,6 @@ file(GLOB SRC_FILES "${LIGHTCTRL_SRC_DIR}/*.c*")
 
 # Set project includes dir
 include_directories(
-  "${LIGHTCTRL_INCLUDE_DIR}"
   "${SPDLOG_INCLUDE_DIR}"
   )
 

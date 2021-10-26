@@ -1,8 +1,7 @@
 #include <iostream>
 #include <string>
-#include <utility.h>
-#include <logger.h>
 
+#include "logger.h"
 #include "utility.h"
 #include "timer.h"
 

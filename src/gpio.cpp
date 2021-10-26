@@ -1,4 +1,3 @@
-#include <gpio.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -6,9 +5,11 @@
 #include <errno.h>
 #include <string.h>
 #include <poll.h>
-#include <utility.h>
-#include <timer.h>
-#include <logger.h>
+
+#include "gpio.h"
+#include "utility.h"
+#include "timer.h"
+#include "logger.h"
 
 Gpio::Gpio(int pin)
     : m_isr_func(nullptr), m_err(), m_pin(pin), m_thread_running(), m_isr_thread(), m_isr(false)

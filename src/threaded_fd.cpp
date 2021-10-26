@@ -272,7 +272,7 @@ void Threaded_Fd::wait_callback_func(Timer * timer)
     _setError(Threaded_Fd::CommandNoResponse, 0);
 }
 
-std::string error_string(const Threaded_Fd::Error & err)
+std::string Threaded_Fd::error_string(const Threaded_Fd::Error & err)
 {
     std::string ret;
     ret += "File descriptor error: " + std::string(strerror(err._errno));

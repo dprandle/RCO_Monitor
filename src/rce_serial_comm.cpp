@@ -123,6 +123,7 @@ RCE_Serial_Comm::~RCE_Serial_Comm()
 
 void RCE_Serial_Comm::init()
 {
+    Subsystem::init();
     // Create the default commands
     add_command<Reboot_Updated_Firmware>("RBUFW");
     add_command<Firmware_Update>("FWU");
@@ -137,13 +138,12 @@ void RCE_Serial_Comm::init()
 
     rce_uart_->start();
     rce_uart_->write("Starting RCO Monitor\r");
-    Subsystem::init();
 }
 
 void RCE_Serial_Comm::release()
 {
-    rce_uart_->stop();
     Subsystem::release();
+    rce_uart_->stop();
 }
 
 void RCE_Serial_Comm::update()

@@ -25,15 +25,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-rtti -fno-exceptions")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-rtti")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
 add_definitions(-DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 add_definitions(-DCURRENT_VERSION_MAJOR=${CURRENT_VERSION_MAJOR})
 add_definitions(-DCURRENT_VERSION_MINOR=${CURRENT_VERSION_MINOR})
 add_definitions(-DCURRENT_VERSION_PATCH=${CURRENT_VERSION_PATCH})
 
-# when building, don't use the install RPATH already
-# (but later on when installing)
+# Use install RPATH when building
 SET(CMAKE_BUILD_WITH_INSTALL_RPATH true)
 
 # the RPATH to be used when installing
@@ -60,22 +59,21 @@ add_executable(${TARGET_NAME} ${SRC_FILES})
 set_target_properties(${TARGET_NAME} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 
 target_link_libraries(${TARGET_NAME}
-  spdlog
   pthread
   stdc++fs
   )
 
-if (${CMAKE_BUILD_TYPE} STREQUAL Release)
-add_custom_command(
-    TARGET ${TARGET_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-    ${CMAKE_BINARY_DIR}/bin/${TARGET_NAME}
-    /home/ubuntu/bin/${TARGET_NAME})
+# if (${CMAKE_BUILD_TYPE} STREQUAL Release)
+# add_custom_command(
+#     TARGET ${TARGET_NAME} POST_BUILD
+#     COMMAND ${CMAKE_COMMAND} -E copy
+#     ${CMAKE_BINARY_DIR}/bin/${TARGET_NAME}
+#     /home/ubuntu/bin/${TARGET_NAME})
 
-add_custom_command(
-    TARGET ${TARGET_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E create_symlink
-    /home/ubuntu/bin/${TARGET_NAME}
-    /home/ubuntu/bin/RCO_Monitor
-    )
-endif()
+# add_custom_command(
+#     TARGET ${TARGET_NAME} POST_BUILD
+#     COMMAND ${CMAKE_COMMAND} -E create_symlink
+#     /home/ubuntu/bin/${TARGET_NAME}
+#     /home/ubuntu/bin/RCO_Monitor
+#     )
+# endif()

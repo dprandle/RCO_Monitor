@@ -1,4 +1,5 @@
 build
 *.core
 .clangd
+*.log
 compile_commands.json

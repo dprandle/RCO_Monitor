@@ -10,7 +10,7 @@
 void sig_exit_handler(int signum)
 {
     edm.stop();
-    exit(0);
+    //exit(0);
 }
 
 int32_t main(int32_t argc, char * argv[])
@@ -19,8 +19,8 @@ int32_t main(int32_t argc, char * argv[])
     signal(SIGINT, sig_exit_handler);
     signal(SIGKILL, sig_exit_handler);
     
-    edm.add_subsystem<RCE_Serial_Comm>();
-    edm.add_subsystem<Radio_Telnet>();
+    //edm.add_subsystem<RCE_Serial_Comm>();
+    edm.add_subsystem<Radio_Telnet>(9,11);
 	edm.start();
 	
     return 0;

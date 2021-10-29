@@ -130,7 +130,9 @@ void Main_Control::start()
 
     init();
     while (running())
+    {
         update();
+    }
 }
 
 void Main_Control::stop()

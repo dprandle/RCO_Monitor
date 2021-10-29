@@ -2,9 +2,10 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include "timer.h"
 #include <string.h>
+#include <sys/types.h>
 
+#include "timer.h"
 #include "callback.h"
 #include "threaded_fd.h"
 #include "utility.h"
@@ -19,7 +20,8 @@ Threaded_Fd::Threaded_Fd(uint32_t readbuf_, uint32_t writebuf_)
       write_buf_size_(writebuf_),
       read_buf_size_(readbuf_),
       m_current_wait_for_byte_count(0),
-      m_wait_timer(new Timer())
+      m_wait_timer(new Timer()),
+      m_thread(0)
 {
     pthread_mutex_init(&m_send_lock, nullptr);
     pthread_mutex_init(&m_recv_lock, nullptr);
@@ -37,18 +39,14 @@ Threaded_Fd::Threaded_Fd(uint32_t readbuf_, uint32_t writebuf_)
 
 Threaded_Fd::~Threaded_Fd()
 {
-    if (running())
-    {
-        stop();
-        pthread_join(m_thread, nullptr);
-    }
     pthread_mutex_destroy(&m_send_lock);
     pthread_mutex_destroy(&m_recv_lock);
     pthread_mutex_destroy(&m_error_lock);
     free(m_read_buffer);
     free(m_write_buffer);
     delete m_wait_timer;
-    close(m_fd);
+    if (m_fd > 0)
+        close(m_fd);
 }
 
 uint32_t Threaded_Fd::read(uint8_t * buffer, uint32_t max_size)
@@ -113,8 +111,6 @@ Threaded_Fd::Error Threaded_Fd::error()
 {
     pthread_mutex_lock(&m_error_lock);
     Error ret = m_err;
-    m_err._errno = 0;
-    m_err.err_val = NoError;
     pthread_mutex_unlock(&m_error_lock);
     return ret;
 }
@@ -162,8 +158,16 @@ bool Threaded_Fd::set_fd(int32_t fd_)
 
 void Threaded_Fd::stop()
 {
-    ilog("Thread stopped by stop!");
-    m_thread_running.clear();
+    ilog("Stopping thread for fd {}", m_fd);
+    if (m_thread_running.test_and_set())
+    {
+        m_thread_running.clear();
+    }
+    else
+    {
+        ilog("Thread for fd {} already complete or never started (this is fine)", m_fd);
+    }
+    pthread_join(m_thread, nullptr);
 }
 
 void Threaded_Fd::_do_read()
@@ -175,7 +179,7 @@ void Threaded_Fd::_do_read()
         if (err_no != EAGAIN && err_no != EWOULDBLOCK)
         {
             _setError(InvalidRead, err_no);
-            stop();
+            m_thread_running.clear();
         }
     }
     pthread_mutex_lock(&m_recv_lock);
@@ -198,7 +202,7 @@ void Threaded_Fd::_do_read()
         if (m_read_rawindex == m_read_curindex)
         {
             _setError(InvalidRead, 0);
-            stop();
+            m_thread_running.clear();
         }
     }
     pthread_mutex_unlock(&m_recv_lock);
@@ -240,7 +244,7 @@ void Threaded_Fd::_do_write()
         if (retval == -1)
         {
             _setError(InvalidWrite, errno);
-            stop();
+            m_thread_running.clear();
         }
         sent += retval;
     }
@@ -256,12 +260,13 @@ void Threaded_Fd::_exec()
             _do_write();
         _do_read();
     }
+    m_thread_running.clear();
 }
 
 void * Threaded_Fd::thread_exec(void * _this)
 {
-    ilog("Starting thread...");
     Threaded_Fd * thfd = static_cast<Threaded_Fd *>(_this);
+    ilog("Starting thread for fd {}", thfd->fd());
     thfd->_exec();
     return nullptr;
 }
@@ -276,11 +281,11 @@ std::string Threaded_Fd::error_string(const Threaded_Fd::Error & err)
 {
     std::string ret;
     ret += "File descriptor error: " + std::string(strerror(err._errno));
-    ret += "\nThread error: ";
+    ret += "   Thread error: ";
     switch (err.err_val)
     {
     case (Threaded_Fd::NoError):
-        ret += "No error found";
+        ret += "None";
         break;
     case (Threaded_Fd::ConnectionClosed):
         ret += "Connection was closed";

@@ -17,10 +17,10 @@ class Main_Control
     Main_Control();
     virtual ~Main_Control();
     
-    template<class T>
-    T * add_subsystem()
+    template<class T, class ...Args>
+    T * add_subsystem(Args... args)
     {
-        T * sys = new T();
+        T * sys = new T(args...);
         if (add_subsystem(sys) == -1)
         {
             delete sys;

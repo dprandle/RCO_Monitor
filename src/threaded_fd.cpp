@@ -26,8 +26,8 @@ Threaded_Fd::Threaded_Fd(uint32_t readbuf_, uint32_t writebuf_)
     pthread_mutex_init(&m_send_lock, nullptr);
     pthread_mutex_init(&m_recv_lock, nullptr);
     pthread_mutex_init(&m_error_lock, nullptr);
-    m_read_buffer = (uint8_t*)malloc(read_buf_size_);
-    m_write_buffer = (WriteVal*)malloc(write_buf_size_*sizeof(WriteVal));
+    m_read_buffer = (uint8_t *)malloc(read_buf_size_);
+    m_write_buffer = (WriteVal *)malloc(write_buf_size_ * sizeof(WriteVal));
 
     m_wait_timer->set_callback_delay(COMMAND_WAIT_DELAY);
     m_wait_timer->set_callback_mode(Timer::single_shot);
@@ -140,6 +140,7 @@ bool Threaded_Fd::start()
         m_thread_running.clear();
         return false;
     }
+    _setError(NoError, 0);
     return true;
 }
 
@@ -168,6 +169,11 @@ void Threaded_Fd::stop()
         ilog("Thread for fd {} already complete or never started (this is fine)", m_fd);
     }
     pthread_join(m_thread, nullptr);
+    m_read_rawindex = 0;
+    m_read_curindex = 0;
+    m_write_rawindex = 0;
+    m_write_curindex = 0;
+    m_current_wait_for_byte_count = 0;
 }
 
 void Threaded_Fd::_do_read()

@@ -2,6 +2,12 @@
 
 #include "threaded_fd.h"
 
+struct Timeout_Interval
+{
+    uint16_t secs;
+    uint16_t usecs;
+};
+
 class Socket : public Threaded_Fd
 {
   public:
@@ -9,7 +15,7 @@ class Socket : public Threaded_Fd
     Socket();
 	~Socket();
 
-    int connect(const std::string & ip_address, int16_t port, int8_t timeout_secs);
+    int connect(const std::string & ip_address, int16_t port, const Timeout_Interval & timeout);
 
     std::string & get_ip();
 

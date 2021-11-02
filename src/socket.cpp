@@ -16,7 +16,7 @@ Socket::Socket() : Threaded_Fd(), _port(0)
     set_fd(socket_fd);
 }
 
-int Socket::connect(const std::string & ip_address, int16_t port, int8_t timeout_secs)
+int Socket::connect(const std::string & ip_address, int16_t port, const Timeout_Interval & timeout_intv)
 {
     _ip = ip_address;
     _port = port;
@@ -28,8 +28,8 @@ int Socket::connect(const std::string & ip_address, int16_t port, int8_t timeout
     server_addr.sin_port = htons(port);
 
     struct timeval timeout;
-    timeout.tv_sec = timeout_secs; // after 2 seconds connect() will timeout
-    timeout.tv_usec = 0;
+    timeout.tv_sec = timeout_intv.secs; // after 2 seconds connect() will timeout
+    timeout.tv_usec = timeout_intv.usecs;
     setsockopt(fd(), SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
     return ::connect(fd(), (struct sockaddr *)&server_addr, sizeof(server_addr));

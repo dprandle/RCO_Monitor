@@ -13,15 +13,15 @@ namespace cmd
 {
 namespace str
 {
-extern const std::string FREQ;
 extern const std::string ID;
+extern const std::string FREQ;
 extern const std::string MEAS;
 extern const std::string RSTAT;
 } // namespace str
 namespace ind
 {
-extern const uint8_t FREQ;
 extern const uint8_t ID;
+extern const uint8_t FREQ;
 extern const uint8_t MEAS;
 extern const uint8_t RSTAT;
 } // namespace ind
@@ -37,8 +37,9 @@ struct Command_Info
 
 struct TX_Params
 {
-    TX_Params() : ptt_status(INVALID_VALUE), forward_power(0.0f), reflected_power(0.0f), vswr(0.0f)
-    {}
+    TX_Params();
+    std::string to_string();
+    std::string to_csv();
     uint8_t ptt_status;
     float forward_power;
     float reflected_power;
@@ -47,28 +48,22 @@ struct TX_Params
 
 struct RX_Params
 {
-    RX_Params() : squelch_status(INVALID_VALUE), agc(0.0)
-    {}
+    RX_Params();
+    std::string to_string();
+    std::string to_csv();
     uint8_t squelch_status;
     float agc;
 };
 
 struct CM300_Radio
 {
-    CM300_Radio()
-        : sk(nullptr),
-          type(INVALID_VALUE),
-          uorv(INVALID_VALUE),
-          freq_mhz(0.0),
-          serial(),
-          tx(),
-          rx(),
-          cur_cmd(INVALID_VALUE),
-          prev_cmd(INVALID_VALUE),
-          buffer_offset(0),
-          response_buffer{0},
-          retry_count(5)
-    {}
+    CM300_Radio();
+    std::string radio_type();
+    std::string radio_range();
+    std::string to_string();
+    std::string to_csv();
+
+
     Socket * sk;
     uint8_t type;
     uint8_t uorv;
@@ -82,6 +77,7 @@ struct CM300_Radio
     uint16_t buffer_offset;
     uint8_t response_buffer[BUFFER_SIZE];
     uint8_t retry_count;
+    size_t complete_scan_count;
 };
 
 class Radio_Telnet : public Subsystem
@@ -115,6 +111,7 @@ class Radio_Telnet : public Subsystem
     void _update_closed(CM300_Radio * radio);
     void _update(CM300_Radio * radio);
     void _parse_response_to_radio_data(CM300_Radio * radio);
+    void _extract_string_to_radio(CM300_Radio * radio, const std::string & str);
 
     bool _logging;
     int8_t _ip_lb;
@@ -126,4 +123,5 @@ class Radio_Telnet : public Subsystem
     std::string commands[COMMAND_COUNT];
 
     std::vector<CM300_Radio> _radios;
+    size_t complete_scans;
 };

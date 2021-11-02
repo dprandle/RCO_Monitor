@@ -23,7 +23,7 @@ void Logger::initialize()
         spdlog::sinks_init_list sink_list = {file_sink, console_sink};
 
         spdlog::flush_every(std::chrono::seconds(3));
-        spdlog::flush_on(spdlog::level::info);
+        //spdlog::flush_on(spdlog::level::info);
 
         logger_ = std::make_shared<spdlog::logger>("multi_sink", sink_list.begin(), sink_list.end());
         logger_->set_level(spdlog::level::trace);

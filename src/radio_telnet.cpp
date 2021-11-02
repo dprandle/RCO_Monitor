@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <iostream>
-#include <sstream>
 
 #include "logger.h"
 #include "radio_telnet.h"
@@ -10,15 +9,15 @@ namespace cmd
 {
 namespace str
 {
-const std::string FREQ = "FREQ?\n";
 const std::string ID = "ID?\n";
+const std::string FREQ = "FREQ?\n";
 const std::string MEAS = "MEAS?\n";
 const std::string RSTAT = "RSTAT?\n";
 } // namespace str
 namespace ind
 {
-const uint8_t FREQ = 0;
-const uint8_t ID = 1;
+const uint8_t ID = 0;
+const uint8_t FREQ = 1;
 const uint8_t MEAS = 2;
 const uint8_t RSTAT = 3;
 } // namespace ind
@@ -26,8 +25,78 @@ const uint8_t RSTAT = 3;
 
 static int resp_len = 0;
 
+TX_Params::TX_Params() : ptt_status(INVALID_VALUE), forward_power(0.0f), reflected_power(0.0f), vswr(0.0f)
+{}
+
+std::string TX_Params::to_string()
+{}
+
+std::string TX_Params::to_csv()
+{}
+
+RX_Params::RX_Params() : squelch_status(INVALID_VALUE), agc(0.0)
+{}
+
+std::string RX_Params::to_string()
+{}
+
+std::string RX_Params::to_csv()
+{}
+
+CM300_Radio::CM300_Radio()
+    : sk(nullptr),
+      type(INVALID_VALUE),
+      uorv(INVALID_VALUE),
+      freq_mhz(0.0),
+      serial(),
+      tx(),
+      rx(),
+      cur_cmd(INVALID_VALUE),
+      prev_cmd(INVALID_VALUE),
+      buffer_offset(0),
+      response_buffer{0},
+      retry_count(5),
+      complete_scan_count(0)
+{}
+
+std::string CM300_Radio::radio_type()
+{
+    std::string ret;
+    if (serial.find('T') != std::string::npos)
+        ret = "Transmitter";
+    else if (serial.find('R') != std::string::npos)
+        ret = "Receiver";
+    return ret;
+}
+
+std::string CM300_Radio::radio_range()
+{
+    std::string ret;
+    if (serial.find('U') != std::string::npos)
+        ret = "UHF";
+    else if (serial.find('V') != std::string::npos)
+        ret = "VHF";
+    return ret;
+}
+
+std::string CM300_Radio::to_string()
+{
+    
+}
+
+std::string CM300_Radio::to_csv()
+{
+    if (radio_type() == "Transmitter")
+        return tx.to_csv();
+    return rx.to_csv();
+}
+
 Radio_Telnet::Radio_Telnet(uint8_t ip_lower_bound, uint8_t ip_upper_bound)
-    : _ip_lb(ip_lower_bound), _ip_ub(ip_upper_bound), _logging(false), commands{cmd::str::FREQ, cmd::str::ID, cmd::str::MEAS, cmd::str::RSTAT}
+    : _ip_lb(ip_lower_bound),
+      _ip_ub(ip_upper_bound),
+      _logging(false),
+      commands{cmd::str::ID, cmd::str::FREQ, cmd::str::MEAS, cmd::str::RSTAT},
+      complete_scans(0)
 {
     resp_len = strlen(RESPONSE_COMPLETE_STR);
 }
@@ -106,11 +175,28 @@ void Radio_Telnet::release()
 void Radio_Telnet::update()
 {
     auto iter = _radios.begin();
+    bool ptt_or_squelch_change = false;
+    bool complete_scan = true;
+
     while (iter != _radios.end())
     {
+        CM300_Radio prev = *iter;
+
         _update(&(*iter));
         _update_closed(&(*iter));
+
+        ptt_or_squelch_change =
+            ptt_or_squelch_change || ((prev.tx.ptt_status != iter->tx.ptt_status) || (prev.rx.squelch_status != iter->rx.squelch_status));
+        complete_scan = complete_scan && (iter->complete_scan_count > complete_scans);
         ++iter;
+    }
+
+    if (complete_scan)
+        ++complete_scans;
+
+    if (ptt_or_squelch_change)
+    {
+        ilog("STATUS CHANGE!");
     }
 }
 
@@ -124,14 +210,13 @@ void Radio_Telnet::_update(CM300_Radio * radio)
 
     if (radio->buffer_offset >= resp_len)
     {
-        if (strncmp((char *)radio->response_buffer + (radio->buffer_offset - cnt), RESPONSE_COMPLETE_STR, resp_len))
+        if (strncmp((char *)radio->response_buffer + (radio->buffer_offset - resp_len), RESPONSE_COMPLETE_STR, resp_len) == 0)
         {
-            ilog("Received complete packet for {} at {} (buffer size: {})!", radio->cur_cmd, radio->sk->get_ip(), radio->buffer_offset);
-            radio->response_buffer[radio->buffer_offset] = '\0';
+            //ilog("Received complete packet for {} at {} (buffer size: {})!", radio->cur_cmd, radio->sk->get_ip(), radio->buffer_offset);
+            _parse_response_to_radio_data(radio);
             radio->buffer_offset = 0;
             radio->prev_cmd = radio->cur_cmd;
             radio->cur_cmd = -1;
-            _parse_response_to_radio_data(radio);
             bzero(radio->response_buffer, resp_len);
         }
     }
@@ -140,11 +225,15 @@ void Radio_Telnet::_update(CM300_Radio * radio)
     {
         radio->cur_cmd = radio->prev_cmd + 1;
         if (radio->cur_cmd > cmd::ind::RSTAT)
-            radio->cur_cmd = cmd::ind::FREQ;
-        ilog("Done with prev command: {} - sending next command: {}", radio->prev_cmd, radio->cur_cmd);
+            radio->cur_cmd = cmd::ind::ID;
+
+        //ilog("Done with prev command for {}: {}} - sending next command: {}", radio->sk->get_ip(), radio->prev_cmd, radio->cur_cmd);
         radio->sk->write(commands[radio->cur_cmd].c_str());
         //sleep(1);
     }
+
+    if (radio->cur_cmd == cmd::ind::ID && radio->prev_cmd == cmd::ind::RSTAT)
+        ++radio->complete_scan_count;
 }
 
 void Radio_Telnet::_update_closed(CM300_Radio * radio)
@@ -187,6 +276,62 @@ void Radio_Telnet::_update_closed(CM300_Radio * radio)
     }
 }
 
+void Radio_Telnet::_extract_string_to_radio(CM300_Radio * radio, const std::string & str)
+{
+    size_t pos = str.find(':');
+    if (pos == std::string::npos)
+        return;
+    std::string param_name = str.substr(0, pos);
+    std::string param_value = str.substr(pos + 1, str.size() - pos + 1);
+    if (param_name == "RADIOID")
+    {
+        radio->serial = param_value;
+    }
+    else if (param_name == "OPERATINGFREQUENCY")
+    {
+        radio->freq_mhz = std::stof(param_value);
+    }
+    else if (param_name == "FORWARDPOWER")
+    {
+        radio->tx.forward_power = std::stof(param_value.substr(0, param_value.size() - 1));
+        //radio->freq_mhz = std::
+    }
+    else if (param_name == "REFLECTEDPOWER")
+    {
+        radio->tx.reflected_power = std::stof(param_value.substr(0, param_value.size() - 1));
+    }
+    else if (param_name == "SWR")
+    {
+        radio->tx.forward_power = std::stof(param_value);
+    }
+    else if (param_name == "AGC")
+    {
+        radio->rx.agc = std::stof(param_value.substr(0, param_value.size() - 1));
+    }
+    else if (param_name == "PTTSTATUS")
+    {
+        if (param_value == "OFF")
+            radio->tx.ptt_status = 0;
+        else if (param_value == "ON")
+            radio->tx.ptt_status = 1;
+        else
+            radio->tx.ptt_status = INVALID_VALUE;
+    }
+    else if (param_name == "SQUELCHBREAKSTATUS")
+    {
+        if (param_value == "CLOSED")
+            radio->rx.squelch_status = 0;
+        else if (param_value == "OPEN")
+            radio->rx.squelch_status = 1;
+        else
+            radio->rx.squelch_status = INVALID_VALUE;
+    }
+    else
+    {
+        // Skip - no need to update anything
+    }
+}
+
 void Radio_Telnet::_parse_response_to_radio_data(CM300_Radio * radio)
 {
     std::string curline;
@@ -199,7 +344,7 @@ void Radio_Telnet::_parse_response_to_radio_data(CM300_Radio * radio)
         {
             if (curline.find(':') != std::string::npos)
             {
-                ilog("Received line: {}", curline);
+                _extract_string_to_radio(radio, curline);
             }
             curline.clear();
         }

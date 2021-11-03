@@ -38,6 +38,20 @@ void delay(double ms)
         t.update();
 }
 
+std::string get_current_date_string()
+{
+    time_t t = time(nullptr);
+    tm * ltm = localtime(&t);
+    return std::to_string(1900+ltm->tm_year) + "-" + std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday);
+}
+
+std::string get_current_time_string()
+{
+    time_t t = time(nullptr);
+    tm * ltm = localtime(&t);
+    return std::to_string(ltm->tm_hour) + ":" + std::to_string(ltm->tm_min) + ":" + std::to_string(ltm->tm_sec);
+}
+
 uint16_t files_in_dir(const char * dirname)
 {
     uint16_t count = 0;

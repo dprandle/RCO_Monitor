@@ -1,9 +1,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <iostream>
+#include <fstream>
+#include <cmath>
 
+#include "utility.h"
+#include "main_control.h"
 #include "logger.h"
 #include "radio_telnet.h"
+#include "timer.h"
+
+#define STR_PRECISION(str, precision) str.substr(0, str.find('.') + precision + 1)
+#define NUM_2_STR(val, prec) STR_PRECISION(std::to_string(std::round((val)*pow(10, prec)) / pow(10, prec)), prec)
 
 namespace cmd
 {
@@ -25,28 +33,68 @@ const uint8_t RSTAT = 3;
 
 static int resp_len = 0;
 
-TX_Params::TX_Params() : ptt_status(INVALID_VALUE), forward_power(0.0f), reflected_power(0.0f), vswr(0.0f)
+TX_Params::TX_Params() : ptt_status(INVALID_VALUE), forward_power(INVALID_FLOAT), reverse_power(INVALID_FLOAT), vswr(INVALID_FLOAT)
 {}
 
-std::string TX_Params::to_string()
+std::string TX_Params::ptt_string() const
+{
+    if (ptt_status == PTT_LOCAL)
+        return "On (Local)";
+    else if (ptt_status == PTT_REMOTE)
+        return "On (Remote)";
+    else if (ptt_status == PTT_TEST_RF)
+        return "On (Test RF)";
+    else if (ptt_status == 0)
+        return "Off";
+    else
+        return "Invalid";
+}
+
+std::string TX_Params::to_string() const
+{
+    std::string ret("PTT Status: ");
+    ret += ptt_string() + "\n";
+    ret += "Forward Power: " + NUM_2_STR(forward_power, 2) + "W\n";
+    ret += "Reflected Power: " + NUM_2_STR(reverse_power, 2) + "W\n";
+    ret += "VSWR: " + NUM_2_STR(vswr, 2) + "\n";
+    return ret;
+}
+
+bool TX_Params::initialized() const
+{
+    return ((ptt_status != INVALID_VALUE) && (forward_power > (INVALID_FLOAT + EPS)) && (reverse_power > (INVALID_FLOAT + EPS)) &&
+            (vswr > (INVALID_FLOAT + EPS)));
+}
+
+RX_Params::RX_Params() : squelch_status(INVALID_VALUE), agc(INVALID_FLOAT), line_level(INVALID_FLOAT)
 {}
 
-std::string TX_Params::to_csv()
-{}
+std::string RX_Params::squelch_string() const
+{
+    if (squelch_status == SQUELCH_OPEN)
+        return "Open";
+    else if (squelch_status == SQUELCH_CLOSED)
+        return "Closed";
+    else
+        return "Invalid";
+}
 
-RX_Params::RX_Params() : squelch_status(INVALID_VALUE), agc(0.0)
-{}
+std::string RX_Params::to_string() const
+{
+    std::string ret("Squelch Status: ");
+    ret += squelch_string() + "\n";
+    ret += "AGC: " + NUM_2_STR(agc, 2) + "\n";
+    ret += "Line Level: " + NUM_2_STR(line_level, 2) + "dBm\n";
+    return ret;
+}
 
-std::string RX_Params::to_string()
-{}
-
-std::string RX_Params::to_csv()
-{}
+bool RX_Params::initialized() const
+{
+    return ((squelch_status != INVALID_VALUE) && (agc > (INVALID_FLOAT + EPS)) && (line_level > (INVALID_FLOAT + EPS)));
+}
 
 CM300_Radio::CM300_Radio()
     : sk(nullptr),
-      type(INVALID_VALUE),
-      uorv(INVALID_VALUE),
       freq_mhz(0.0),
       serial(),
       tx(),
@@ -59,36 +107,54 @@ CM300_Radio::CM300_Radio()
       complete_scan_count(0)
 {}
 
-std::string CM300_Radio::radio_type()
+std::string CM300_Radio::radio_type() const
 {
     std::string ret;
     if (serial.find('T') != std::string::npos)
-        ret = "Transmitter";
+        ret = TX_STR;
     else if (serial.find('R') != std::string::npos)
-        ret = "Receiver";
+        ret = RX_STR;
+    else
+        ret = NOT_READY_STR;
     return ret;
 }
 
-std::string CM300_Radio::radio_range()
+std::string CM300_Radio::radio_range() const
 {
     std::string ret;
     if (serial.find('U') != std::string::npos)
         ret = "UHF";
     else if (serial.find('V') != std::string::npos)
         ret = "VHF";
+    else
+        ret = NOT_READY_STR;
     return ret;
 }
 
-std::string CM300_Radio::to_string()
+std::string CM300_Radio::to_string() const
 {
-    
+    std::string ret("Serial: ");
+    if (!serial.empty())
+        ret += serial + "\n";
+    else
+        ret += "Not Initialized\n";
+    ret += "Type: " + radio_type() + "\n";
+    ret += "Range: " + radio_range() + "\n";
+    ret += "Frequency: " + NUM_2_STR(freq_mhz, 2) + "\n";
+    auto type = radio_type();
+    if (type == TX_STR)
+        ret += tx.to_string();
+    else if (type == RX_STR)
+        ret += rx.to_string();
+    return ret;
 }
 
-std::string CM300_Radio::to_csv()
+bool CM300_Radio::initialized() const
 {
-    if (radio_type() == "Transmitter")
-        return tx.to_csv();
-    return rx.to_csv();
+    bool init = true;
+    init = init && !serial.empty();
+    init = init && (freq_mhz > EPS);
+    return init && (rx.initialized() || tx.initialized());
 }
 
 Radio_Telnet::Radio_Telnet(uint8_t ip_lower_bound, uint8_t ip_upper_bound)
@@ -106,6 +172,27 @@ Radio_Telnet::~Radio_Telnet()
 
 void Radio_Telnet::init()
 {
+    // Make a default logger...
+    Logger_Entry def;
+    def.loptions.name = "ANCE Intermod";
+    
+    // Enable all this crap
+    def.loptions.vswr.option_a = LOPTIONA_LTHAN;
+    def.loptions.agc.option_a = LOPTIONA_LTHAN;
+    def.loptions.line_level.option_a = LOPTIONA_LTHAN;
+    def.loptions.forward_power.option_a = LOPTIONA_LTHAN;
+    
+    // Actual triggers to log
+    def.loptions.ptt_status.option_a = LOPTIONA_NEQUAL;
+    def.loptions.ptt_status.option_c = PTT_OFF;
+
+    def.loptions.squelch_status.option_a = LOPTIONA_EQUAL;
+    def.loptions.squelch_status.option_c = SQUELCH_OPEN;
+    
+    def.loptions.frequency = 100;
+    
+    _loggers.push_back(def);
+
     Subsystem::init();
     int8_t size = (_ip_ub - _ip_lb + 1);
     int64_t arg = 0;
@@ -172,12 +259,117 @@ void Radio_Telnet::release()
     _radios.clear();
 }
 
+void Logger_Entry::update_and_log_if_needed(const std::vector<CM300_Radio> & radios)
+{
+    ms_counter += edm.sys_timer()->dt();
+    bool should_log = false;
+
+    if (ms_counter >= loptions.frequency)
+    {
+        ms_counter = 0;
+
+        for (int rind = 0; rind < radios.size(); ++rind)
+        {
+            CM300_Radio * prev = &prev_state[rind];
+            const CM300_Radio * cur = &radios[rind];
+            bool is_tx = (cur->radio_type() == TX_STR);
+
+            // Always log on serial change or freq change
+            should_log = should_log ||
+                         (cur->serial != prev->serial); // || (cur->freq_mhz > (prev->freq_mhz + EPS)) || (cur->freq_mhz < (prev->freq_mhz - EPS));
+            // if (should_log)
+            //     ilog("Should log 1 - prev->serial {}   cur->serial {}   prev->freq {}    cur->freq {}", prev->serial,cur->serial,prev->freq_mhz,cur->freq_mhz);
+
+            if (is_tx)
+            {
+                // PTT options
+                should_log = should_log || ((loptions.ptt_status.option_a == LOPTIONA_DELTA) && (cur->tx.ptt_status != prev->tx.ptt_status));
+
+                should_log =
+                    should_log || ((loptions.ptt_status.option_a == LOPTIONA_NEQUAL) && (cur->tx.ptt_status != loptions.ptt_status.option_c));
+
+                should_log = should_log || ((loptions.ptt_status.option_a == LOPTIONA_EQUAL) && (cur->tx.ptt_status == loptions.ptt_status.option_c));
+
+                // Forward power options
+                should_log = should_log || ((loptions.forward_power.option_a == LOPTIONA_DELTA) &&
+                                            (std::abs(cur->tx.forward_power - prev->tx.forward_power) > loptions.forward_power.option_b));
+
+                should_log = should_log ||
+                             ((loptions.forward_power.option_a == LOPTIONA_GTHANEQUAL) && (cur->tx.forward_power >= loptions.forward_power.option_b));
+
+                should_log =
+                    should_log || ((loptions.forward_power.option_a == LOPTIONA_LTHAN) && (cur->tx.forward_power < loptions.forward_power.option_b));
+
+                // Reverse power options
+                should_log = should_log || ((loptions.reverse_power.option_a == LOPTIONA_DELTA) &&
+                                            (std::abs(cur->tx.reverse_power - prev->tx.reverse_power) > loptions.reverse_power.option_b));
+
+                should_log = should_log ||
+                             ((loptions.reverse_power.option_a == LOPTIONA_GTHANEQUAL) && (cur->tx.reverse_power >= loptions.reverse_power.option_b));
+
+                should_log =
+                    should_log || ((loptions.reverse_power.option_a == LOPTIONA_LTHAN) && (cur->tx.reverse_power < loptions.reverse_power.option_b));
+
+                // VSWR power options
+                should_log =
+                    should_log || ((loptions.vswr.option_a == LOPTIONA_DELTA) && (std::abs(cur->tx.vswr - prev->tx.vswr) > loptions.vswr.option_b));
+
+                should_log = should_log || ((loptions.vswr.option_a == LOPTIONA_GTHANEQUAL) && (cur->tx.vswr >= loptions.vswr.option_b));
+
+                should_log = should_log || ((loptions.vswr.option_a == LOPTIONA_LTHAN) && (cur->tx.vswr < loptions.vswr.option_b));
+            }
+            else
+            {
+                // RX squelch break options
+                should_log =
+                    should_log || ((loptions.squelch_status.option_a == LOPTIONA_DELTA) && (cur->rx.squelch_status != prev->rx.squelch_status));
+
+                should_log = should_log ||
+                             ((loptions.squelch_status.option_a == LOPTIONA_NEQUAL) && (cur->rx.squelch_status != loptions.squelch_status.option_c));
+
+                should_log = should_log ||
+                             ((loptions.squelch_status.option_a == LOPTIONA_EQUAL) && (cur->rx.squelch_status == loptions.squelch_status.option_c));
+
+                // AGC options
+                should_log =
+                    should_log || ((loptions.agc.option_a == LOPTIONA_DELTA) && (std::abs(cur->rx.agc - prev->rx.agc) > loptions.agc.option_b));
+
+                should_log = should_log || ((loptions.agc.option_a == LOPTIONA_GTHANEQUAL) && (cur->rx.agc >= loptions.agc.option_b));
+
+                should_log = should_log || ((loptions.agc.option_a == LOPTIONA_LTHAN) && (cur->rx.agc < loptions.agc.option_b));
+
+                // Line Level options
+                should_log = should_log || ((loptions.line_level.option_a == LOPTIONA_DELTA) &&
+                                            (std::abs(cur->rx.line_level - prev->rx.line_level) > loptions.line_level.option_b));
+
+                should_log =
+                    should_log || ((loptions.line_level.option_a == LOPTIONA_GTHANEQUAL) && (cur->rx.line_level >= loptions.line_level.option_b));
+
+                should_log = should_log || ((loptions.line_level.option_a == LOPTIONA_DELTA) && (cur->rx.line_level < loptions.line_level.option_b));
+            }
+        }
+    }
+    else if (prev_state.size() != radios.size())
+    {
+        ms_counter = 0;
+        should_log = true;
+    }
+
+    if (should_log)
+    {
+        prev_state = radios;
+        write_radio_data_to_file();
+    }
+}
+
 void Radio_Telnet::update()
 {
-    auto iter = _radios.begin();
-    bool ptt_or_squelch_change = false;
+    static std::vector<CM300_Radio *> initialized_radios;
+    static bool all_radios_init = false;
+
     bool complete_scan = true;
 
+    auto iter = _radios.begin();
     while (iter != _radios.end())
     {
         CM300_Radio prev = *iter;
@@ -185,8 +377,15 @@ void Radio_Telnet::update()
         _update(&(*iter));
         _update_closed(&(*iter));
 
-        ptt_or_squelch_change =
-            ptt_or_squelch_change || ((prev.tx.ptt_status != iter->tx.ptt_status) || (prev.rx.squelch_status != iter->rx.squelch_status));
+        if (iter->initialized())
+        {}
+
+        if (!prev.initialized() && iter->initialized())
+        {
+            initialized_radios.push_back(&(*iter));
+            ilog("Radio at {} initialized:\n{}", iter->sk->get_ip(), iter->to_string());
+        }
+
         complete_scan = complete_scan && (iter->complete_scan_count > complete_scans);
         ++iter;
     }
@@ -194,10 +393,149 @@ void Radio_Telnet::update()
     if (complete_scan)
         ++complete_scans;
 
-    if (ptt_or_squelch_change)
+    if (all_radios_init)
     {
-        ilog("STATUS CHANGE!");
+        for (int i = 0; i < _loggers.size(); ++i)
+            _loggers[i].update_and_log_if_needed(_radios);
     }
+
+    if (!all_radios_init && initialized_radios.size() == _radios.size())
+    {
+        ilog("All radios initialized");
+        all_radios_init = true;
+
+        // Setup the loggers prev state to now!
+        for (int i = 0; i < _loggers.size(); ++i)
+        {
+            _loggers[i].prev_state = _radios;
+            _loggers[i].write_headers_to_file();
+        }
+    }
+}
+
+std::string Logger_Entry::get_header()
+{
+    std::string first_row;
+    std::string second_row;
+
+    for (int i = 0; i < prev_state.size(); ++i)
+    {
+        std::vector<std::string> cur_row;
+
+        CM300_Radio * rad = &prev_state[i];
+        if (rad->radio_type() == TX_STR)
+        {
+            if (loptions.ptt_status.option_a != INVALID_VALUE)
+                cur_row.push_back("PTT");
+            if (loptions.forward_power.option_a != INVALID_VALUE)
+                cur_row.push_back("Fwd Pwr");
+            if (loptions.reverse_power.option_a != INVALID_VALUE)
+                cur_row.push_back("Rev Pwr");
+            if (loptions.vswr.option_a != INVALID_VALUE)
+                cur_row.push_back("VSWR");
+        }
+        else if (rad->radio_type() == RX_STR)
+        {
+            if (loptions.squelch_status.option_a != INVALID_VALUE)
+                cur_row.push_back("Squelch");
+            if (loptions.agc.option_a != INVALID_VALUE)
+                cur_row.push_back("AGC");
+            if (loptions.line_level.option_a != INVALID_VALUE)
+                cur_row.push_back("Line Lvl");
+        }
+        else
+        {
+            wlog("Unknown Radio Type (serial: {} freq: {})", rad->serial, rad->freq_mhz);
+        }
+
+        for (int i = 0; i < cur_row.size(); ++i)
+        {
+            if (i == 0)
+                first_row += std::to_string(rad->freq_mhz) + " " + rad->radio_range() + " " + rad->radio_type() + " (" + rad->serial + ")";
+            first_row += ",";
+            second_row += cur_row[i] + ",";
+        }
+    }
+    if (!first_row.empty())
+    {
+        first_row.pop_back();
+        first_row = ",," + first_row;
+    }
+    if (!second_row.empty())
+    {
+        second_row.pop_back();
+        second_row = "Time (h:m:s), Elapsed (s)," + second_row;
+    }
+    return first_row + "\n" + second_row;
+}
+
+std::string Logger_Entry::get_row()
+{
+    std::string row;
+
+    for (int i = 0; i < prev_state.size(); ++i)
+    {
+        std::vector<std::string> cur_row;
+
+        CM300_Radio * rad = &prev_state[i];
+        if (rad->radio_type() == TX_STR)
+        {
+            if (loptions.ptt_status.option_a != INVALID_VALUE)
+                cur_row.push_back(rad->tx.ptt_string());
+            if (loptions.forward_power.option_a != INVALID_VALUE)
+                cur_row.push_back(NUM_2_STR(rad->tx.forward_power, 2));
+            if (loptions.reverse_power.option_a != INVALID_VALUE)
+                cur_row.push_back(NUM_2_STR(rad->tx.reverse_power, 2));
+            if (loptions.vswr.option_a != INVALID_VALUE)
+                cur_row.push_back(NUM_2_STR(rad->tx.vswr, 2));
+        }
+        else if (rad->radio_type() == RX_STR)
+        {
+            if (loptions.squelch_status.option_a != INVALID_VALUE)
+                cur_row.push_back(rad->rx.squelch_string());
+            if (loptions.agc.option_a != INVALID_VALUE)
+                cur_row.push_back(NUM_2_STR(rad->rx.agc, 2));
+            if (loptions.line_level.option_a != INVALID_VALUE)
+                cur_row.push_back(NUM_2_STR(rad->rx.line_level, 2));
+        }
+
+        for (int i = 0; i < cur_row.size(); ++i)
+            row += cur_row[i] + ",";
+    }
+    if (!row.empty())
+    {
+        row.pop_back();
+        row = util::get_current_time_string() + "," + NUM_2_STR(edm.sys_timer()->elapsed()/1000.0,2) + "," + row;
+    }
+    return row;
+}
+
+std::string Logger_Entry::get_fname()
+{
+    std::string fname = loptions.name + " (" + util::get_current_date_string() + ").csv";
+    if (!loptions.dir_path.empty())
+    {
+        if (loptions.dir_path.back() != '/')
+            fname = "/" + fname;
+        fname = loptions.dir_path + fname;
+    }
+    return fname;
+}
+
+void Logger_Entry::write_headers_to_file()
+{
+    std::ofstream output;
+    output.open(get_fname(), std::ios::out | std::ios::trunc);
+    output << get_header() << "\n";
+    output.close();
+}
+
+void Logger_Entry::write_radio_data_to_file()
+{
+    std::ofstream output;
+    output.open(get_fname(), std::ios::out | std::ios::app);
+    output << get_row() << "\n";
+    output.close();
 }
 
 void Radio_Telnet::_update(CM300_Radio * radio)
@@ -227,9 +565,7 @@ void Radio_Telnet::_update(CM300_Radio * radio)
         if (radio->cur_cmd > cmd::ind::RSTAT)
             radio->cur_cmd = cmd::ind::ID;
 
-        //ilog("Done with prev command for {}: {}} - sending next command: {}", radio->sk->get_ip(), radio->prev_cmd, radio->cur_cmd);
         radio->sk->write(commands[radio->cur_cmd].c_str());
-        //sleep(1);
     }
 
     if (radio->cur_cmd == cmd::ind::ID && radio->prev_cmd == cmd::ind::RSTAT)
@@ -294,35 +630,42 @@ void Radio_Telnet::_extract_string_to_radio(CM300_Radio * radio, const std::stri
     else if (param_name == "FORWARDPOWER")
     {
         radio->tx.forward_power = std::stof(param_value.substr(0, param_value.size() - 1));
-        //radio->freq_mhz = std::
     }
     else if (param_name == "REFLECTEDPOWER")
     {
-        radio->tx.reflected_power = std::stof(param_value.substr(0, param_value.size() - 1));
+        radio->tx.reverse_power = std::stof(param_value.substr(0, param_value.size() - 1));
     }
     else if (param_name == "SWR")
     {
-        radio->tx.forward_power = std::stof(param_value);
+        radio->tx.vswr = std::stof(param_value);
     }
     else if (param_name == "AGC")
     {
         radio->rx.agc = std::stof(param_value.substr(0, param_value.size() - 1));
     }
+    else if (param_name == "LINELEVEL")
+    {
+        radio->rx.line_level = std::stof(param_value.substr(0, param_value.size() - 3));
+    }
     else if (param_name == "PTTSTATUS")
     {
         if (param_value == "OFF")
-            radio->tx.ptt_status = 0;
-        else if (param_value == "ON")
-            radio->tx.ptt_status = 1;
+            radio->tx.ptt_status = PTT_OFF;
+        else if (param_value == "LOCAL")
+            radio->tx.ptt_status = PTT_LOCAL;
+        else if (param_value == "REMOTE")
+            radio->tx.ptt_status = PTT_REMOTE;
+        else if (param_value == "TESTRF")
+            radio->tx.ptt_status = PTT_TEST_RF;
         else
             radio->tx.ptt_status = INVALID_VALUE;
     }
     else if (param_name == "SQUELCHBREAKSTATUS")
     {
         if (param_value == "CLOSED")
-            radio->rx.squelch_status = 0;
+            radio->rx.squelch_status = SQUELCH_CLOSED;
         else if (param_value == "OPEN")
-            radio->rx.squelch_status = 1;
+            radio->rx.squelch_status = SQUELCH_OPEN;
         else
             radio->rx.squelch_status = INVALID_VALUE;
     }

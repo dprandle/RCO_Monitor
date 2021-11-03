@@ -2,11 +2,16 @@
 
 #include <bits/stdint-intn.h>
 #include <inttypes.h>
+#include <string>
 
 namespace util
 {
 
 bool save_data_to_file(uint8_t * data, uint32_t size, const char * fname, int mode_flags);
+
+std::string get_current_date_string();
+
+std::string get_current_time_string();
 
 uint32_t hash_id(const char * to_hash);
 

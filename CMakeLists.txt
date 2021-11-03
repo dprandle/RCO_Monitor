@@ -4,14 +4,14 @@ set(CURRENT_VERSION_MAJOR 1)
 set(CURRENT_VERSION_MINOR 0)
 set(CURRENT_VERSION_PATCH 0)
 
-project(Radio_Logger VERSION ${CURRENT_VERSION_MAJOR}.${CURRENT_VERSION_MINOR}.${CURRENT_VERSION_PATCH})
+project(Radio_Monitor VERSION ${CURRENT_VERSION_MAJOR}.${CURRENT_VERSION_MINOR}.${CURRENT_VERSION_PATCH})
 
 set(DEPENDENCY_DIR ${CMAKE_SOURCE_DIR}/deps)
 set(SPDLOG_DIR ${DEPENDENCY_DIR}/spdlog)
 set(SPDLOG_INCLUDE_DIR ${SPDLOG_DIR}/include)
 
 # Executable name
-set(TARGET_NAME "Radio_Logger-v${CURRENT_VERSION_MAJOR}.${CURRENT_VERSION_MINOR}.${CURRENT_VERSION_PATCH}.rpi")
+set(TARGET_NAME "Radio_Monitor-v${CURRENT_VERSION_MAJOR}.${CURRENT_VERSION_MINOR}.${CURRENT_VERSION_PATCH}.rpi")
 
 # Set the source directory
 set(LIGHTCTRL_SRC_DIR ${CMAKE_SOURCE_DIR}/src)
@@ -74,6 +74,6 @@ target_link_libraries(${TARGET_NAME}
 #     TARGET ${TARGET_NAME} POST_BUILD
 #     COMMAND ${CMAKE_COMMAND} -E create_symlink
 #     /home/ubuntu/bin/${TARGET_NAME}
-#     /home/ubuntu/bin/RCO_Monitor
+#     /home/ubuntu/bin/${PROJECT_NAME}
 #     )
 # endif()

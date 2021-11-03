@@ -17,7 +17,7 @@ void Logger::initialize()
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         console_sink->set_level(spdlog::level::debug);
 
-        auto file_sink = std::make_shared<spdlog::sinks::daily_file_sink_mt>("logs/rco_monitor.log", 0, 0);
+        auto file_sink = std::make_shared<spdlog::sinks::daily_file_sink_mt>("logs/radio_monitor.log", 0, 0);
         file_sink->set_level(spdlog::level::trace);
 
         spdlog::sinks_init_list sink_list = {file_sink, console_sink};

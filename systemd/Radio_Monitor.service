@@ -1,5 +1,5 @@
 [Unit]
-Description=Radio_Logger service
+Description=Radio_Monitor service
 StartLimitIntervalSec=0
 
 [Service]
@@ -7,7 +7,7 @@ Type=simple
 Restart=on-failure
 RestartSec=1
 User=ubuntu
-ExecStart=/home/ubuntu/bin/Radio_Logger
+ExecStart=/home/ubuntu/bin/Radio_Monitor
 WorkingDirectory=/home/ubuntu/bin
 
 [Install]

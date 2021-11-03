@@ -1,5 +1,5 @@
 [Unit]
-Description=RCO_Monitor service
+Description=Radio_Logger service
 StartLimitIntervalSec=0
 
 [Service]
@@ -7,7 +7,7 @@ Type=simple
 Restart=on-failure
 RestartSec=1
 User=ubuntu
-ExecStart=/home/ubuntu/bin/RCO_Monitor
+ExecStart=/home/ubuntu/bin/Radio_Logger
 WorkingDirectory=/home/ubuntu/bin
 
 [Install]

@@ -2,6 +2,7 @@
 #include <string.h>
 #include <iostream>
 #include <fstream>
+#include <stdio.h>
 #include <cmath>
 
 #include "config_file.h"
@@ -557,7 +558,6 @@ void Radio_Telnet::update()
 
         complete_scan = complete_scan && (iter->complete_scan_count > complete_scans);
         ++iter;
-        
     }
     if (complete_scan)
     {
@@ -694,7 +694,10 @@ std::string Logger_Entry::get_row()
 
 std::string Logger_Entry::get_fname()
 {
-    std::string fname = name + " (" + util::get_current_date_string() + ").csv";
+    time_t t = time(nullptr);
+    tm * ltm = localtime(&t);
+
+    std::string fname = name + " [" + util::formatted_date(ltm) + " at " + std::to_string(ltm->tm_hour * 100) + "].csv";
     if (!loptions.dir_path.empty())
     {
         if (loptions.dir_path.back() != '/')
@@ -704,26 +707,68 @@ std::string Logger_Entry::get_fname()
     return fname;
 }
 
-void Logger_Entry::write_headers_to_file()
+bool Logger_Entry::write_headers_to_file()
 {
     std::ofstream output;
-    output.open(get_fname(), std::ios::out | std::ios::trunc);
+    std::string fname = get_fname();
+
+    if (util::file_exists(fname))
+    {
+        std::string new_name = fname.substr(0, fname.size() - 4) + " (Stopped " + util::get_current_time_string() + ").csv";
+        if (std::rename(fname.c_str(), new_name.c_str()) == 0)
+        {
+            ilog("Renaming {} to {} as the logger has been restarted (renamed file is from previous execution)", fname, new_name);
+        }
+        else
+        {
+            wlog("Could not rename {} to {}: {} - the logger was restarted so this file will be overwritten", fname, new_name, strerror(errno));
+        }
+    }
+
+    output.open(fname, std::ios::out | std::ios::trunc);
     if (output.is_open())
     {
+        ilog("Successfully opened {} for logging", fname);
         output << get_header() << "\n";
         output.close();
+        return true;
     }
+    else
+    {
+        ilog("Could not open {}: {}", fname, strerror(errno));
+        if (!loptions.dir_path.empty())
+        {
+            ilog("Trying to open file in cwd instead of {}", loptions.dir_path);
+            std::string saved = loptions.dir_path;
+            loptions.dir_path.clear();
+            bool result = write_headers_to_file();
+            loptions.dir_path = saved;
+            return result;
+        }
+    }
+    return false;
 }
 
-void Logger_Entry::write_radio_data_to_file()
+bool Logger_Entry::write_radio_data_to_file()
 {
     std::ofstream output;
-    output.open(get_fname(), std::ios::out | std::ios::app);
+    std::string fname = get_fname();
+    output.open(fname, std::ios::out | std::ios::app);
     if (output.is_open())
     {
         output << get_row() << "\n";
         output.close();
+        return true;
     }
+    else if (!loptions.dir_path.empty())
+    {
+        std::string saved = loptions.dir_path;
+        loptions.dir_path.clear();
+        bool result = write_radio_data_to_file();
+        loptions.dir_path = saved;
+        return result;
+    }
+    return false;
 }
 
 void Radio_Telnet::_update(CM300_Radio * radio)
@@ -889,6 +934,31 @@ void Radio_Telnet::_parse_response_to_radio_data(CM300_Radio * radio)
 void Radio_Telnet::enable_logging(bool enable)
 {
     _logging = enable;
+}
+
+bool Radio_Telnet::logging_enabled() const
+{
+    return _logging;
+}
+
+void Radio_Telnet::set_ip_lower_bound(int8_t ip_lb)
+{
+    _ip_lb = ip_lb;
+}
+
+int8_t Radio_Telnet::get_ip_lower_bound() const
+{
+    return _ip_lb;
+}
+
+void Radio_Telnet::set_ip_upper_bound(int8_t ip_ub)
+{
+    _ip_ub = ip_ub;
+}
+
+int8_t Radio_Telnet::get_ip_upper_bound() const
+{
+    return _ip_ub;
 }
 
 const char * Radio_Telnet::typestr()

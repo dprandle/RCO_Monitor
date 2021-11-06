@@ -155,8 +155,8 @@ struct Logger_Entry
     Logger_Entry() : ms_counter(0)
     {}
     void update_and_log_if_needed(const std::vector<CM300_Radio> & radios);
-    void write_headers_to_file();
-    void write_radio_data_to_file();
+    bool write_headers_to_file();
+    bool write_radio_data_to_file();
     std::string get_header();
     std::string get_row();
     std::string get_fname();
@@ -181,6 +181,16 @@ class Radio_Telnet : public Subsystem
     void update();
 
     void enable_logging(bool enable);
+
+    bool logging_enabled() const;
+
+    void set_ip_lower_bound(int8_t ip_lb);
+
+    int8_t get_ip_lower_bound() const;
+
+    void set_ip_upper_bound(int8_t ip_ub);
+
+    int8_t get_ip_upper_bound() const;
 
     void set_max_retry_count(uint8_t max_retry_count);
 

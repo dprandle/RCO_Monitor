@@ -21,7 +21,7 @@ int32_t main(int32_t argc, char * argv[])
     
     //edm.add_subsystem<RCE_Serial_Comm>();
     edm.add_subsystem<Radio_Telnet>();
-	edm.start("Test_Config.json");
+	edm.start("ANCE_config.json");
 	
     return 0;
 }

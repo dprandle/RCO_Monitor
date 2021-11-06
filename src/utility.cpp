@@ -20,6 +20,12 @@ std::string & to_lower(std::string & s)
     return s;
 }
 
+bool file_exists(const std::string & name)
+{
+  struct stat buffer;   
+  return (stat (name.c_str(), &buffer) == 0); 
+}
+
 bool save_data_to_file(uint8_t * data, uint32_t size, const char * fname, int mode_flags)
 {
     int fd = open(fname, O_RDWR | O_CREAT, mode_flags);
@@ -64,18 +70,28 @@ void delay(double ms)
         t.update();
 }
 
+std::string formatted_date(tm * time_struct)
+{
+    return std::to_string(1900+time_struct->tm_year) + "-" + std::to_string(1 + time_struct->tm_mon) + "-" + std::to_string(time_struct->tm_mday);
+}
+
+std::string formatted_time(tm * time_struct)
+{
+    return std::to_string(time_struct->tm_hour) + ":" + std::to_string(time_struct->tm_min) + ":" + std::to_string(time_struct->tm_sec);
+}
+
 std::string get_current_date_string()
 {
     time_t t = time(nullptr);
     tm * ltm = localtime(&t);
-    return std::to_string(1900+ltm->tm_year) + "-" + std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday);
+    return formatted_date(ltm);
 }
 
 std::string get_current_time_string()
 {
     time_t t = time(nullptr);
     tm * ltm = localtime(&t);
-    return std::to_string(ltm->tm_hour) + ":" + std::to_string(ltm->tm_min) + ":" + std::to_string(ltm->tm_sec);
+    return formatted_time(ltm);
 }
 
 uint16_t files_in_dir(const char * dirname)

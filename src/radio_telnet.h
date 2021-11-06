@@ -1,8 +1,13 @@
 #pragma once
 
 #include <vector>
+#include <unordered_map>
+
 #include "subsystem.h"
 #include "socket.h"
+
+#define MAP_CONTAINS(map,param) map.find(param) != map.end()
+
 class Socket;
 
 const int8_t COMMAND_COUNT = 4;
@@ -35,25 +40,28 @@ const uint8_t INVALID_VALUE = -1;
 const float INVALID_FLOAT = -100.0f;
 const float EPS = 0.001f;
 
-const uint8_t PTT_OFF = 0;
-const uint8_t PTT_LOCAL = 1;
-const uint8_t PTT_REMOTE = 2;
-const uint8_t PTT_TEST_RF = 3;
+const uint8_t PTT_OFF = 1;
+const uint8_t PTT_LOCAL = 2;
+const uint8_t PTT_REMOTE = 4;
+const uint8_t PTT_TEST_RF = 8;
 
-const uint8_t LOPTIONA_DELTA = 0;
-const uint8_t LOPTIONA_NEQUAL = 1;
-const uint8_t LOPTIONA_EQUAL = 2;
-const uint8_t LOPTIONA_GTHANEQUAL = 1;
-const uint8_t LOPTIONA_LTHAN = 2;
+const uint8_t LOPTIONA_DELTA = 1;
+const uint8_t LOPTIONA_NEQUAL = 2;
+const uint8_t LOPTIONA_EQUAL = 4;
+const uint8_t LOPTIONA_GTHANEQUAL = 2;
+const uint8_t LOPTIONA_LTHAN = 4;
 
-const uint8_t SQUELCH_CLOSED = 0;
-const uint8_t SQUELCH_OPEN = 1;
+const uint8_t SQUELCH_CLOSED = 1;
+const uint8_t SQUELCH_OPEN = 2;
 
 struct Command_Info
 {
     std::string name;
     std::string resp_key;
 };
+
+std::string ptt_string(uint8_t status);
+std::string squelch_string(uint8_t status);
 
 struct TX_Params
 {
@@ -88,7 +96,6 @@ struct CM300_Radio
     std::string to_string() const;
     bool initialized() const;
 
-
     Socket * sk;
     float freq_mhz;
     std::string serial;
@@ -103,32 +110,50 @@ struct CM300_Radio
     size_t complete_scan_count;
 };
 
-struct Log_Item_Options
+template<class T>
+struct Log_Item_Option
 {
-    Log_Item_Options():option_a(INVALID_VALUE), option_b(INVALID_FLOAT), option_c(INVALID_VALUE) {}
-    uint8_t option_a;
-    float option_b;
-    uint8_t option_c;
+    Log_Item_Option() : val(), enabled(false)
+    {}
+    T val;
+    bool enabled;
+};
+
+struct Log_Option_Group
+{
+    Log_Option_Group() {}
+    Log_Item_Option<std::string> title;
+    Log_Item_Option<float> greater_than;
+    Log_Item_Option<float> less_than;
+    Log_Item_Option<float> change;
+    Log_Item_Option<float> percent_change;
+    Log_Item_Option<int32_t> equal;
 };
 
 struct Logger_Options
 {
-    Logger_Options(): dir_path(), frequency(INVALID_VALUE) {}
-    std::string name;
+    Logger_Options(): dir_path(), frequency(0), log_changes_to_status(false) {}
     std::string dir_path;
-    Log_Item_Options ptt_status;
-    Log_Item_Options squelch_status;
-    Log_Item_Options forward_power;
-    Log_Item_Options reverse_power;
-    Log_Item_Options vswr;
-    Log_Item_Options agc;
-    Log_Item_Options line_level;
     uint32_t frequency;
+    bool log_changes_to_status;
+
+    /* 
+    The option keys for log item options so far are listed below:
+        ptt_status
+        squelch_status
+        forward_power
+        reverse_power
+        vswr
+        agc
+        line_level
+     */
+    std::unordered_map<std::string, Log_Option_Group> item_options;
 };
 
 struct Logger_Entry
 {
-    Logger_Entry():ms_counter(0) {}
+    Logger_Entry() : ms_counter(0)
+    {}
     void update_and_log_if_needed(const std::vector<CM300_Radio> & radios);
     void write_headers_to_file();
     void write_radio_data_to_file();
@@ -138,18 +163,18 @@ struct Logger_Entry
 
     Logger_Options loptions;
     double ms_counter;
+    std::string name;
     std::vector<CM300_Radio> prev_state;
 };
-
 
 class Radio_Telnet : public Subsystem
 {
   public:
-    Radio_Telnet(uint8_t ip_lower_bound, uint8_t ip_upper_bound);
+    Radio_Telnet();
 
     ~Radio_Telnet();
 
-    void init();
+    void init(Config_File * config);
 
     void release();
 
@@ -174,6 +199,7 @@ class Radio_Telnet : public Subsystem
     void _update(CM300_Radio * radio);
     void _parse_response_to_radio_data(CM300_Radio * radio);
     void _extract_string_to_radio(CM300_Radio * radio, const std::string & str);
+    void _set_options_from_config_file(Config_File * cfg);
 
     bool _logging;
     int8_t _ip_lb;
@@ -183,7 +209,7 @@ class Radio_Telnet : public Subsystem
 
     size_t _cur_cmd;
     std::string commands[COMMAND_COUNT];
-    std::vector<Logger_Entry> _loggers;
+    std::unordered_map<std::string, Logger_Entry> _loggers;
 
     std::vector<CM300_Radio> _radios;
     size_t complete_scans;

@@ -65,7 +65,7 @@ class RCE_Serial_Comm : public Subsystem
 
     ~RCE_Serial_Comm();
 
-    void init();
+    void init(Config_File * config);
 
     void release();
 

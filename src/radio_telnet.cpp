@@ -4,6 +4,7 @@
 #include <fstream>
 #include <cmath>
 
+#include "config_file.h"
 #include "utility.h"
 #include "main_control.h"
 #include "logger.h"
@@ -33,21 +34,36 @@ const uint8_t RSTAT = 3;
 
 static int resp_len = 0;
 
+std::string ptt_string(uint8_t status)
+{
+    if (status == PTT_LOCAL)
+        return "On (Local)";
+    else if (status == PTT_REMOTE)
+        return "On (Remote)";
+    else if (status == PTT_TEST_RF)
+        return "On (Test RF)";
+    else if (status == 0)
+        return "Off";
+    else
+        return "Invalid";
+}
+
+std::string squelch_string(uint8_t status)
+{
+    if (status == SQUELCH_OPEN)
+        return "Open";
+    else if (status == SQUELCH_CLOSED)
+        return "Closed";
+    else
+        return "Invalid";
+}
+
 TX_Params::TX_Params() : ptt_status(INVALID_VALUE), forward_power(INVALID_FLOAT), reverse_power(INVALID_FLOAT), vswr(INVALID_FLOAT)
 {}
 
 std::string TX_Params::ptt_string() const
 {
-    if (ptt_status == PTT_LOCAL)
-        return "On (Local)";
-    else if (ptt_status == PTT_REMOTE)
-        return "On (Remote)";
-    else if (ptt_status == PTT_TEST_RF)
-        return "On (Test RF)";
-    else if (ptt_status == 0)
-        return "Off";
-    else
-        return "Invalid";
+    return ::ptt_string(ptt_status);
 }
 
 std::string TX_Params::to_string() const
@@ -71,12 +87,7 @@ RX_Params::RX_Params() : squelch_status(INVALID_VALUE), agc(INVALID_FLOAT), line
 
 std::string RX_Params::squelch_string() const
 {
-    if (squelch_status == SQUELCH_OPEN)
-        return "Open";
-    else if (squelch_status == SQUELCH_CLOSED)
-        return "Closed";
-    else
-        return "Invalid";
+    return ::squelch_string(squelch_status);
 }
 
 std::string RX_Params::to_string() const
@@ -157,10 +168,13 @@ bool CM300_Radio::initialized() const
     return init && (rx.initialized() || tx.initialized());
 }
 
-Radio_Telnet::Radio_Telnet(uint8_t ip_lower_bound, uint8_t ip_upper_bound)
-    : _ip_lb(ip_lower_bound),
-      _ip_ub(ip_upper_bound),
-      _logging(false),
+Radio_Telnet::Radio_Telnet()
+    : _logging(true),
+      _ip_lb(10),
+      _ip_ub(13),
+      _max_retry_count(10),
+      _conn_timeout(0, 500000),
+      _cur_cmd(INVALID_VALUE),
       commands{cmd::str::ID, cmd::str::FREQ, cmd::str::MEAS, cmd::str::RSTAT},
       complete_scans(0)
 {
@@ -170,30 +184,170 @@ Radio_Telnet::Radio_Telnet(uint8_t ip_lower_bound, uint8_t ip_upper_bound)
 Radio_Telnet::~Radio_Telnet()
 {}
 
-void Radio_Telnet::init()
+void parse_item_groupj(const nlohmann::json & source, const std::string & name, Logger_Entry * le)
 {
-    // Make a default logger...
-    Logger_Entry def;
-    def.loptions.name = "ANCE Intermod";
-    
-    // Enable all this crap
-    def.loptions.vswr.option_a = LOPTIONA_LTHAN;
-    def.loptions.agc.option_a = LOPTIONA_LTHAN;
-    def.loptions.line_level.option_a = LOPTIONA_LTHAN;
-    def.loptions.forward_power.option_a = LOPTIONA_LTHAN;
-    
-    // Actual triggers to log
-    def.loptions.ptt_status.option_a = LOPTIONA_NEQUAL;
-    def.loptions.ptt_status.option_c = PTT_OFF;
+    nlohmann::json option_obj;
+    try
+    {
+        if (fill_param_if_found(source, name, &option_obj))
+        {
+            std::string str;
+            Log_Option_Group log;
+            try
+            {
+                log.title.enabled = fill_param_if_found(option_obj, "title", &log.title.val);
+            }
+            catch (nlohmann::detail::exception & e)
+            {
+                elog("Error for title is in parent json object {}", name);
+            }
 
-    def.loptions.squelch_status.option_a = LOPTIONA_EQUAL;
-    def.loptions.squelch_status.option_c = SQUELCH_OPEN;
-    
-    def.loptions.frequency = 100;
-    
-    _loggers.push_back(def);
+            if (name == "ptt_status" || name == "squelch_status")
+            {
+                try
+                {
+                    log.equal.enabled = fill_param_if_found(option_obj, "equal", &str);
+                }
+                catch (nlohmann::detail::exception & e)
+                {
+                    elog("Error for equal is in parent json object {}", name);
+                }
 
-    Subsystem::init();
+                log.change.enabled = MAP_CONTAINS(option_obj, "change");
+                if (log.equal.enabled)
+                {
+                    util::to_lower(str);
+                    if (str.find("off") != std::string::npos)
+                        log.equal.val |= PTT_OFF;
+                    if (str.find("local") != std::string::npos)
+                        log.equal.val |= PTT_LOCAL;
+                    if (str.find("remote") != std::string::npos)
+                        log.equal.val |= PTT_REMOTE;
+                    if (str.find("test_rf") != std::string::npos)
+                        log.equal.val |= PTT_TEST_RF;
+                    if (str.find("open") != std::string::npos)
+                        log.equal.val |= SQUELCH_OPEN;
+                    if (str.find("closed") != std::string::npos)
+                        log.equal.val |= SQUELCH_CLOSED;
+                }
+            }
+            else
+            {
+                try
+                {
+                    log.change.enabled = fill_param_if_found(option_obj, "change", &log.change.val);
+                }
+                catch (nlohmann::detail::exception & e)
+                {
+                    elog("Error for change is in parent json object {}", name);
+                }
+
+                if (log.change.enabled)
+                    log.change.val = std::abs(log.change.val);
+
+                try
+                {
+                    log.percent_change.enabled = fill_param_if_found(option_obj, "percent_change", &log.percent_change.val);
+                    if (log.percent_change.enabled)
+                        log.percent_change.val = std::abs(log.percent_change.val);
+                }
+                catch (nlohmann::detail::exception & e)
+                {
+                    elog("Error for percent_change is in parent json object {}", name);
+                }
+
+                try
+                {
+                    log.less_than.enabled = fill_param_if_found(option_obj, "less_than", &log.less_than.val);
+                }
+                catch (nlohmann::detail::exception & e)
+                {
+                    elog("Error for less_than is in parent json object {}", name);
+                }
+
+                try
+                {
+                    log.greater_than.enabled = fill_param_if_found(option_obj, "greater_than", &log.greater_than.val);
+                }
+                catch (nlohmann::detail::exception & e)
+                {
+                    elog("Error for greater_than is in parent json object {}", name);
+                }
+            }
+            le->loptions.item_options[name] = log;
+        }
+    }
+    catch (nlohmann::detail::exception & e)
+    {
+        // skip it
+    }
+}
+
+void Radio_Telnet::_set_options_from_config_file(Config_File * cfg)
+{
+    nlohmann::json obj;
+    static bool added_status_log = false;
+
+    cfg->fill_param_if_found("logging_enabled", &_logging);
+    cfg->fill_param_if_found("ip_lower_bound", &_ip_lb);
+    cfg->fill_param_if_found("ip_upper_bound", &_ip_ub);
+    cfg->fill_param_if_found("loggers", &obj);
+
+    // Now look in the sub obj for the per logger info
+    auto iter = obj.begin();
+    while (iter != obj.end())
+    {
+        Logger_Entry le;
+        le.name = iter.key();
+        try
+        {
+            fill_param_if_found(*iter, "dir_path", &le.loptions.dir_path);
+        }
+        catch (nlohmann::detail::exception & e)
+        {
+            elog("Error for dir_path is in parent json object {}", iter.key());
+        }
+
+        try
+        {
+            fill_param_if_found(*iter, "frequency", &le.loptions.frequency);
+        }
+        catch (nlohmann::detail::exception & e)
+        {
+            elog("Error for frequency is in parent json object {}", iter.key());
+        }
+
+        try
+        {
+            // Only one log entry can log additionally to the status log
+            if (!added_status_log)
+                added_status_log =
+                    fill_param_if_found(*iter, "log_changes_to_status", &le.loptions.log_changes_to_status) && le.loptions.log_changes_to_status;
+        }
+        catch (nlohmann::detail::exception & e)
+        {
+            elog("Error for log_changes_to_status is in parent json object {}", iter.key());
+        }
+
+        parse_item_groupj(*iter, "ptt_status", &le);
+        parse_item_groupj(*iter, "squelch_status", &le);
+        parse_item_groupj(*iter, "forward_power", &le);
+        parse_item_groupj(*iter, "reverse_power", &le);
+        parse_item_groupj(*iter, "vswr", &le);
+        parse_item_groupj(*iter, "agc", &le);
+        parse_item_groupj(*iter, "line_level", &le);
+
+        _loggers[iter.key()] = le;
+        ++iter;
+    }
+}
+
+void Radio_Telnet::init(Config_File * config)
+{
+    Subsystem::init(config);
+
+    _set_options_from_config_file(config);
+
     int8_t size = (_ip_ub - _ip_lb + 1);
     int64_t arg = 0;
 
@@ -259,6 +413,78 @@ void Radio_Telnet::release()
     _radios.clear();
 }
 
+bool _check_status_option(const Logger_Options & le, const std::string & param_name, int32_t cur_status, int32_t prev_status, const CM300_Radio * rad)
+{
+    auto iter = le.item_options.find(param_name);
+    if (iter != le.item_options.end())
+    {
+        bool cond_change = (iter->second.change.enabled && (cur_status != prev_status));
+
+        if (le.log_changes_to_status && cond_change)
+        {
+            std::string pm(param_name);
+            if (iter->second.title.enabled && !iter->second.title.val.empty())
+                pm = iter->second.title.val;
+            std::string prev_string, cur_string;
+            if (rad->radio_type() == TX_STR)
+            {
+                prev_string = ptt_string(prev_status);
+                cur_string = ptt_string(cur_status);
+            }
+            else
+            {
+                prev_string = squelch_string(prev_status);
+                cur_string = squelch_string(cur_status);
+            }
+
+            ilog("{} {} ({}): {} changed to {} (was {})", rad->freq_mhz, rad->radio_type(), rad->serial, pm, cur_string, prev_string);
+        }
+
+        bool cond_equal = (iter->second.equal.enabled && BITS_SET(iter->second.equal.val, cur_status));
+        return cond_change || cond_equal;
+    }
+    return false;
+}
+
+bool _check_float_option(const Logger_Options & le, const std::string & param_name, float cur_val, float prev_val, const CM300_Radio * rad)
+{
+    auto iter = le.item_options.find(param_name);
+    if (iter != le.item_options.end())
+    {
+        double change = std::abs(cur_val - prev_val);
+        double percent_change = change / std::abs(cur_val);
+
+        bool cond_change = (iter->second.change.enabled && (change > iter->second.change.val));
+        bool cond_percent_change = (iter->second.percent_change.enabled && (percent_change > iter->second.percent_change.val));
+
+        if (le.log_changes_to_status && (cond_change || percent_change))
+        {
+            std::string pm(param_name);
+            if (iter->second.title.enabled && !iter->second.title.val.empty())
+                pm = iter->second.title.val;
+            ilog("{} {} ({}): {} changed over log threshold to {} (was {} - change of {}%)",
+                 rad->freq_mhz,
+                 rad->radio_type(),
+                 rad->serial,
+                 pm,
+                 cur_val,
+                 prev_val,
+                 percent_change);
+        }
+
+        bool cond_less_than = (iter->second.less_than.enabled && (cur_val < iter->second.less_than.val));
+        bool cond_greater_than = (iter->second.greater_than.enabled && (cur_val > iter->second.greater_than.val));
+
+        bool cond_less_greater = cond_less_than || cond_greater_than;
+
+        if (iter->second.less_than.enabled && iter->second.greater_than.enabled && (iter->second.less_than.val > iter->second.greater_than.val))
+            cond_less_greater = cond_less_than && cond_greater_than;
+
+        return cond_change || cond_percent_change || cond_less_greater;
+    }
+    return false;
+}
+
 void Logger_Entry::update_and_log_if_needed(const std::vector<CM300_Radio> & radios)
 {
     ms_counter += edm.sys_timer()->dt();
@@ -275,77 +501,20 @@ void Logger_Entry::update_and_log_if_needed(const std::vector<CM300_Radio> & rad
             bool is_tx = (cur->radio_type() == TX_STR);
 
             // Always log on serial change or freq change
-            should_log = should_log ||
-                         (cur->serial != prev->serial); // || (cur->freq_mhz > (prev->freq_mhz + EPS)) || (cur->freq_mhz < (prev->freq_mhz - EPS));
-            // if (should_log)
-            //     ilog("Should log 1 - prev->serial {}   cur->serial {}   prev->freq {}    cur->freq {}", prev->serial,cur->serial,prev->freq_mhz,cur->freq_mhz);
+            should_log = should_log || (cur->serial != prev->serial) || DEQUALS(cur->freq_mhz, prev->freq_mhz, EPS);
 
             if (is_tx)
             {
-                // PTT options
-                should_log = should_log || ((loptions.ptt_status.option_a == LOPTIONA_DELTA) && (cur->tx.ptt_status != prev->tx.ptt_status));
-
-                should_log =
-                    should_log || ((loptions.ptt_status.option_a == LOPTIONA_NEQUAL) && (cur->tx.ptt_status != loptions.ptt_status.option_c));
-
-                should_log = should_log || ((loptions.ptt_status.option_a == LOPTIONA_EQUAL) && (cur->tx.ptt_status == loptions.ptt_status.option_c));
-
-                // Forward power options
-                should_log = should_log || ((loptions.forward_power.option_a == LOPTIONA_DELTA) &&
-                                            (std::abs(cur->tx.forward_power - prev->tx.forward_power) > loptions.forward_power.option_b));
-
-                should_log = should_log ||
-                             ((loptions.forward_power.option_a == LOPTIONA_GTHANEQUAL) && (cur->tx.forward_power >= loptions.forward_power.option_b));
-
-                should_log =
-                    should_log || ((loptions.forward_power.option_a == LOPTIONA_LTHAN) && (cur->tx.forward_power < loptions.forward_power.option_b));
-
-                // Reverse power options
-                should_log = should_log || ((loptions.reverse_power.option_a == LOPTIONA_DELTA) &&
-                                            (std::abs(cur->tx.reverse_power - prev->tx.reverse_power) > loptions.reverse_power.option_b));
-
-                should_log = should_log ||
-                             ((loptions.reverse_power.option_a == LOPTIONA_GTHANEQUAL) && (cur->tx.reverse_power >= loptions.reverse_power.option_b));
-
-                should_log =
-                    should_log || ((loptions.reverse_power.option_a == LOPTIONA_LTHAN) && (cur->tx.reverse_power < loptions.reverse_power.option_b));
-
-                // VSWR power options
-                should_log =
-                    should_log || ((loptions.vswr.option_a == LOPTIONA_DELTA) && (std::abs(cur->tx.vswr - prev->tx.vswr) > loptions.vswr.option_b));
-
-                should_log = should_log || ((loptions.vswr.option_a == LOPTIONA_GTHANEQUAL) && (cur->tx.vswr >= loptions.vswr.option_b));
-
-                should_log = should_log || ((loptions.vswr.option_a == LOPTIONA_LTHAN) && (cur->tx.vswr < loptions.vswr.option_b));
+                should_log = should_log || _check_status_option(loptions, "ptt_status", cur->tx.ptt_status, prev->tx.ptt_status, cur);
+                should_log = should_log || _check_float_option(loptions, "forward_power", cur->tx.forward_power, prev->tx.forward_power, cur);
+                should_log = should_log || _check_float_option(loptions, "reverse_power", cur->tx.reverse_power, prev->tx.reverse_power, cur);
+                should_log = should_log || _check_float_option(loptions, "vswr", cur->tx.vswr, prev->tx.vswr, cur);
             }
             else
             {
-                // RX squelch break options
-                should_log =
-                    should_log || ((loptions.squelch_status.option_a == LOPTIONA_DELTA) && (cur->rx.squelch_status != prev->rx.squelch_status));
-
-                should_log = should_log ||
-                             ((loptions.squelch_status.option_a == LOPTIONA_NEQUAL) && (cur->rx.squelch_status != loptions.squelch_status.option_c));
-
-                should_log = should_log ||
-                             ((loptions.squelch_status.option_a == LOPTIONA_EQUAL) && (cur->rx.squelch_status == loptions.squelch_status.option_c));
-
-                // AGC options
-                should_log =
-                    should_log || ((loptions.agc.option_a == LOPTIONA_DELTA) && (std::abs(cur->rx.agc - prev->rx.agc) > loptions.agc.option_b));
-
-                should_log = should_log || ((loptions.agc.option_a == LOPTIONA_GTHANEQUAL) && (cur->rx.agc >= loptions.agc.option_b));
-
-                should_log = should_log || ((loptions.agc.option_a == LOPTIONA_LTHAN) && (cur->rx.agc < loptions.agc.option_b));
-
-                // Line Level options
-                should_log = should_log || ((loptions.line_level.option_a == LOPTIONA_DELTA) &&
-                                            (std::abs(cur->rx.line_level - prev->rx.line_level) > loptions.line_level.option_b));
-
-                should_log =
-                    should_log || ((loptions.line_level.option_a == LOPTIONA_GTHANEQUAL) && (cur->rx.line_level >= loptions.line_level.option_b));
-
-                should_log = should_log || ((loptions.line_level.option_a == LOPTIONA_DELTA) && (cur->rx.line_level < loptions.line_level.option_b));
+                should_log = should_log || _check_status_option(loptions, "squelch_status", cur->rx.squelch_status, prev->rx.squelch_status, cur);
+                should_log = should_log || _check_float_option(loptions, "agc", cur->rx.agc, prev->rx.agc, cur);
+                should_log = should_log || _check_float_option(loptions, "line_level", cur->rx.line_level, prev->rx.line_level, cur);
             }
         }
     }
@@ -388,15 +557,20 @@ void Radio_Telnet::update()
 
         complete_scan = complete_scan && (iter->complete_scan_count > complete_scans);
         ++iter;
+        
     }
-
     if (complete_scan)
-        ++complete_scans;
-
-    if (all_radios_init)
     {
-        for (int i = 0; i < _loggers.size(); ++i)
-            _loggers[i].update_and_log_if_needed(_radios);
+        if (all_radios_init && _logging)
+        {
+            auto liter = _loggers.begin();
+            while (liter != _loggers.end())
+            {
+                liter->second.update_and_log_if_needed(_radios);
+                ++liter;
+            }
+        }
+        ++complete_scans;
     }
 
     if (!all_radios_init && initialized_radios.size() == _radios.size())
@@ -405,11 +579,26 @@ void Radio_Telnet::update()
         all_radios_init = true;
 
         // Setup the loggers prev state to now!
-        for (int i = 0; i < _loggers.size(); ++i)
+        auto liter = _loggers.begin();
+        while (liter != _loggers.end())
         {
-            _loggers[i].prev_state = _radios;
-            _loggers[i].write_headers_to_file();
+            liter->second.prev_state = _radios;
+            liter->second.write_headers_to_file();
+            liter->second.write_radio_data_to_file();
+            ++liter;
         }
+    }
+}
+
+void _handle_option_header(const Logger_Options & options, std::vector<std::string> & cur_row, const std::string & param)
+{
+    auto iter = options.item_options.find(param);
+    if (iter != options.item_options.end())
+    {
+        std::string title(param);
+        if (iter->second.title.enabled)
+            title = iter->second.title.val;
+        cur_row.push_back(title);
     }
 }
 
@@ -425,23 +614,16 @@ std::string Logger_Entry::get_header()
         CM300_Radio * rad = &prev_state[i];
         if (rad->radio_type() == TX_STR)
         {
-            if (loptions.ptt_status.option_a != INVALID_VALUE)
-                cur_row.push_back("PTT");
-            if (loptions.forward_power.option_a != INVALID_VALUE)
-                cur_row.push_back("Fwd Pwr");
-            if (loptions.reverse_power.option_a != INVALID_VALUE)
-                cur_row.push_back("Rev Pwr");
-            if (loptions.vswr.option_a != INVALID_VALUE)
-                cur_row.push_back("VSWR");
+            _handle_option_header(loptions, cur_row, "ptt_status");
+            _handle_option_header(loptions, cur_row, "forward_power");
+            _handle_option_header(loptions, cur_row, "reverse_power");
+            _handle_option_header(loptions, cur_row, "vswr");
         }
         else if (rad->radio_type() == RX_STR)
         {
-            if (loptions.squelch_status.option_a != INVALID_VALUE)
-                cur_row.push_back("Squelch");
-            if (loptions.agc.option_a != INVALID_VALUE)
-                cur_row.push_back("AGC");
-            if (loptions.line_level.option_a != INVALID_VALUE)
-                cur_row.push_back("Line Lvl");
+            _handle_option_header(loptions, cur_row, "squelch_status");
+            _handle_option_header(loptions, cur_row, "agc");
+            _handle_option_header(loptions, cur_row, "line_level");
         }
         else
         {
@@ -480,22 +662,22 @@ std::string Logger_Entry::get_row()
         CM300_Radio * rad = &prev_state[i];
         if (rad->radio_type() == TX_STR)
         {
-            if (loptions.ptt_status.option_a != INVALID_VALUE)
+            if (MAP_CONTAINS(loptions.item_options, "ptt_status"))
                 cur_row.push_back(rad->tx.ptt_string());
-            if (loptions.forward_power.option_a != INVALID_VALUE)
+            if (MAP_CONTAINS(loptions.item_options, "forward_power"))
                 cur_row.push_back(NUM_2_STR(rad->tx.forward_power, 2));
-            if (loptions.reverse_power.option_a != INVALID_VALUE)
+            if (MAP_CONTAINS(loptions.item_options, "reverse_power"))
                 cur_row.push_back(NUM_2_STR(rad->tx.reverse_power, 2));
-            if (loptions.vswr.option_a != INVALID_VALUE)
+            if (MAP_CONTAINS(loptions.item_options, "vswr"))
                 cur_row.push_back(NUM_2_STR(rad->tx.vswr, 2));
         }
         else if (rad->radio_type() == RX_STR)
         {
-            if (loptions.squelch_status.option_a != INVALID_VALUE)
+            if (MAP_CONTAINS(loptions.item_options, "squelch_status"))
                 cur_row.push_back(rad->rx.squelch_string());
-            if (loptions.agc.option_a != INVALID_VALUE)
+            if (MAP_CONTAINS(loptions.item_options, "agc"))
                 cur_row.push_back(NUM_2_STR(rad->rx.agc, 2));
-            if (loptions.line_level.option_a != INVALID_VALUE)
+            if (MAP_CONTAINS(loptions.item_options, "line_level"))
                 cur_row.push_back(NUM_2_STR(rad->rx.line_level, 2));
         }
 
@@ -505,14 +687,14 @@ std::string Logger_Entry::get_row()
     if (!row.empty())
     {
         row.pop_back();
-        row = util::get_current_time_string() + "," + NUM_2_STR(edm.sys_timer()->elapsed()/1000.0,2) + "," + row;
+        row = util::get_current_time_string() + "," + NUM_2_STR(edm.sys_timer()->elapsed() / 1000.0, 2) + "," + row;
     }
     return row;
 }
 
 std::string Logger_Entry::get_fname()
 {
-    std::string fname = loptions.name + " (" + util::get_current_date_string() + ").csv";
+    std::string fname = name + " (" + util::get_current_date_string() + ").csv";
     if (!loptions.dir_path.empty())
     {
         if (loptions.dir_path.back() != '/')
@@ -526,16 +708,22 @@ void Logger_Entry::write_headers_to_file()
 {
     std::ofstream output;
     output.open(get_fname(), std::ios::out | std::ios::trunc);
-    output << get_header() << "\n";
-    output.close();
+    if (output.is_open())
+    {
+        output << get_header() << "\n";
+        output.close();
+    }
 }
 
 void Logger_Entry::write_radio_data_to_file()
 {
     std::ofstream output;
     output.open(get_fname(), std::ios::out | std::ios::app);
-    output << get_row() << "\n";
-    output.close();
+    if (output.is_open())
+    {
+        output << get_row() << "\n";
+        output.close();
+    }
 }
 
 void Radio_Telnet::_update(CM300_Radio * radio)

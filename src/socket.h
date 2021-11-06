@@ -4,8 +4,9 @@
 
 struct Timeout_Interval
 {
-    uint16_t secs;
-    uint16_t usecs;
+    Timeout_Interval(uint32_t secs_, uint32_t microsecs_):secs(secs_), usecs(microsecs_) {}
+    uint32_t secs;
+    uint32_t usecs;
 };
 
 class Socket : public Threaded_Fd

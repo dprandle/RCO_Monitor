@@ -1,5 +1,7 @@
 #pragma once
 
+class Config_File;
+
 class Subsystem
 {
   public:
@@ -7,7 +9,7 @@ class Subsystem
 
     virtual ~Subsystem();
 
-    virtual void init();
+    virtual void init(Config_File * config);
 
     virtual void release();
 

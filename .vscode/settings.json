@@ -61,7 +61,13 @@
         "thread": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "codecvt": "cpp",
+        "forward_list": "cpp",
+        "valarray": "cpp"
     },
-    "cmake.parallelJobs": 4
+    "cmake.parallelJobs": 12,
+    "search.exclude": {
+        "deploy/": false,
+    }
 }

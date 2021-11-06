@@ -1,0 +1,107 @@
+{
+    "logging_enabled": true,
+    "ip_lower_bound": 5,
+    "ip_upper_bound": 8,
+    "max_radio_retry_reconnect_count": 10,
+    "connection_timeout": {
+        "seconds": 0,
+        "microseconds": 100000
+    },
+    "loggers": {
+        "Everything_200ms": {
+            "dir_path":"/home/ubuntu/32gstick",
+            "frequency": 200,
+            "ptt_status": {
+                "title": "PTT",
+                "equal":"OFF | LOCAL | REMOTE | TEST_RF"
+            },
+            "squelch_status": {
+                "title": "Squelch"
+            },
+            "forward_power": {
+                "title": "Fwd Pwr"
+            },
+            "reverse_power": {
+                "title": "Rev Pwr"
+            },
+            "vswr": {
+                "title": "VSWR"
+            },
+            "agc": {
+                "title": "AGC"
+            },
+            "line_level": {
+                "title": "Line Lvl"
+            }
+        },
+        "PTT_SQ_Active_And_Changed_200ms": {
+            "dir_path":"/home/ubuntu/32gstick",
+            "frequency": 200,
+            "ptt_status": {
+                "title": "PTT",
+                "change": true,
+                "equal":"LOCAL | REMOTE | TEST_RF"
+            },
+            "squelch_status": {
+                "title": "Squelch"
+            },
+            "forward_power": {
+                "title": "Fwd Pwr"
+            },
+            "reverse_power": {
+                "title": "Rev Pwr"
+            },
+            "vswr": {
+                "title": "VSWR"
+            },
+            "agc": {
+                "title": "AGC"
+            },
+            "line_level": {
+                "title": "Line Lvl"
+            }
+        },
+        "PTT_SQ_Changed_Always": {
+            "log_changes_to_status": true,
+            "dir_path":"/home/ubuntu/32gstick",
+            "frequency": 0,
+            "ptt_status": {
+                "title": "PTT",
+                "change": true
+            },
+            "squelch_status": {
+                "title": "Squelch",
+                "change": true
+            },
+            "forward_power": {
+                "title": "Fwd Pwr"
+            },
+            "reverse_power": {
+                "title": "Rev Pwr"
+            },
+            "vswr": {
+                "title": "VSWR"
+            },
+            "agc": {
+                "title": "AGC"
+            },
+            "line_level": {
+                "title": "Line Lvl"
+            }
+        },
+        "High_VSWR_500ms": {
+            "dir_path":"/home/ubuntu/32gstick",
+            "frequency": 500,
+            "forward_power": {
+                "title": "Fwd Pwr"
+            },
+            "reverse_power": {
+                "title": "Rev Pwr"
+            },
+            "vswr": {
+                "title":"VSWR",
+                "greater_than": 1.7
+            }
+        }
+    }
+}

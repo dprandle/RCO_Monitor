@@ -3,6 +3,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <fstream>
+#include <sstream>
 
 #include "logger.h"
 #include "utility.h"
@@ -11,6 +13,12 @@
 namespace util
 {
 static std::string locked_str;
+
+std::string & to_lower(std::string & s)
+{
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); });
+    return s;
+}
 
 bool save_data_to_file(uint8_t * data, uint32_t size, const char * fname, int mode_flags)
 {
@@ -28,6 +36,24 @@ bool save_data_to_file(uint8_t * data, uint32_t size, const char * fname, int mo
         return false;
     }
     return 0;
+}
+
+bool read_file_contents_to_string(const std::string & fname, std::string & contents)
+{
+    std::stringstream buffer;
+
+    std::ifstream output;
+    output.open(fname, std::ios::in);
+    if (!output.is_open())
+        return false;
+
+    output.seekg(0, std::ios::end);
+    size_t size = output.tellg();
+    contents.resize(size);
+    output.seekg(0);
+    output.read(&contents[0], size);
+    output.close();
+    return true;
 }
 
 void delay(double ms)

@@ -3,12 +3,15 @@
 #define edm Main_Control::inst()
 
 #include <inttypes.h>
+#include <string>
 
+const std::string DEFAULT_CONFIG_FNAME = "/home/ubuntu/config.json";
 const uint32_t MAX_SYSTEM_COUNT = 10;
 
 class Subsystem;
 class Timer;
 class Logger;
+class Config_File;
 
 
 class Main_Control
@@ -35,13 +38,15 @@ class Main_Control
 
     bool running();
 
-	void init();
+	void init(Config_File * config);
 	
     void release();
 
     void restart_updated(const char * exe_path, const char * const params[]);
 
-    void start();
+    void start(const std::string & config_fname);
+
+    const std::string & get_config_fname();
 
 	void stop();
 
@@ -67,6 +72,7 @@ class Main_Control
     
   private:
     bool m_running;
+    std::string _config_fname;
     Subsystem * systems_[MAX_SYSTEM_COUNT];
 	Timer * m_systimer;
     Logger * logger_;

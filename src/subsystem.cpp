@@ -7,7 +7,7 @@ Subsystem::Subsystem()
 Subsystem::~Subsystem()
 {}
 
-void Subsystem::init()
+void Subsystem::init(Config_File * config)
 {
     ilog("Initializing system {}", typestr());
 }

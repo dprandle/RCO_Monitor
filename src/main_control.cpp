@@ -6,6 +6,7 @@
 #include "subsystem.h"
 #include "timer.h"
 #include "logger.h"
+#include "config_file.h"
 
 Main_Control::Main_Control() : m_running(false), m_systimer(new Timer()), logger_(new Logger)
 {
@@ -22,12 +23,12 @@ Main_Control::~Main_Control()
     delete logger_;
 }
 
-void Main_Control::init()
+void Main_Control::init(Config_File * config)
 {
     logger_->initialize();
     uint32_t len = util::buf_len(systems_);
     for (int i = 0; i < len; ++i)
-        systems_[i]->init();
+        systems_[i]->init(config);
 }
 
 Main_Control & Main_Control::inst()
@@ -39,21 +40,26 @@ Main_Control & Main_Control::inst()
 void Main_Control::restart_updated(const char * exe_path, const char * const params[])
 {
     uint32_t len = util::buf_len(params);
-    char** arr = (char**)malloc((len+2) * sizeof(char*));
+    char ** arr = (char **)malloc((len + 2) * sizeof(char *));
 
-    arr[0] = (char*)exe_path;
-    arr[len+1] = nullptr;
+    arr[0] = (char *)exe_path;
+    arr[len + 1] = nullptr;
     for (int i = 0; i < len; ++i)
-        arr[i+1] = (char*)params[i];
+        arr[i + 1] = (char *)params[i];
 
     ilog("Restarting {}", exe_path);
     stop();
     if (execv(exe_path, arr) == -1)
     {
         free(arr);
-        elog("Could not restart {} - error: {}",exe_path, strerror(errno));
-        start();
+        elog("Could not restart {} - error: {}", exe_path, strerror(errno));
+        start(_config_fname);
     }
+}
+
+const std::string & Main_Control::get_config_fname()
+{
+    return _config_fname;
 }
 
 bool Main_Control::running()
@@ -116,19 +122,27 @@ void Main_Control::remove_subsystem(const char * sysname)
         {
             systems_[i]->release();
             delete systems_[i];
-            systems_[i] = systems_[len-1];
-            systems_[len-1] = nullptr;
+            systems_[i] = systems_[len - 1];
+            systems_[len - 1] = nullptr;
         }
     }
 }
 
-void Main_Control::start()
+void Main_Control::start(const std::string & config_fname)
 {
     ilog("Starting RCO Monitor");
     m_running = true;
     m_systimer->start();
 
-    init();
+    _config_fname = config_fname;
+
+    Config_File cfg;
+    if (_config_fname.empty())
+        _config_fname = DEFAULT_CONFIG_FNAME;
+    if (!cfg.load(_config_fname))
+        wlog("Could not load config file {}: {}", _config_fname, strerror(errno));
+
+    init(&cfg);
     while (running())
     {
         update();

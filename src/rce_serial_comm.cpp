@@ -121,9 +121,9 @@ RCE_Serial_Comm::~RCE_Serial_Comm()
     delete rce_uart_;
 }
 
-void RCE_Serial_Comm::init()
+void RCE_Serial_Comm::init(Config_File * config)
 {
-    Subsystem::init();
+    Subsystem::init(config);
     // Create the default commands
     add_command<Reboot_Updated_Firmware>("RBUFW");
     add_command<Firmware_Update>("FWU");

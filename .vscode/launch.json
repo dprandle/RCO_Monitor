@@ -11,7 +11,7 @@
             "program": "${command:cmake.launchTargetPath}",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build",
+            "cwd": "${workspaceFolder}/build/Debug/bin",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -19,6 +19,11 @@
                 {
                     "description": "Enable pretty-printing for gdb",
                     "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Better pasting",
+                    "text": "set print elements 0",
                     "ignoreFailures": true
                 }
             ]

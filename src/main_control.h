@@ -5,14 +5,13 @@
 #include <inttypes.h>
 #include <string>
 
-const std::string DEFAULT_CONFIG_FNAME = "/home/ubuntu/config.json";
+const std::string THUMB_DRIVE_MNT_DIR = "/media/usb0";
 const uint32_t MAX_SYSTEM_COUNT = 10;
 
 class Subsystem;
 class Timer;
 class Logger;
 class Config_File;
-
 
 class Main_Control
 {

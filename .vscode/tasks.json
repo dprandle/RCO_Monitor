@@ -13,26 +13,6 @@
                 "clear": true,
                 "focus": true
             },
-            "options": {
-                "cwd": "${workspaceFolder}/build/Debug/bin"
-            },
-            "problemMatcher": []
-        },
-        {
-            "label": "Enable Systemd Service",
-            "type": "shell",
-            "command": "sudo systemctl link ~/Documents/Code/RCO_Monitor/systemd/RCO_Monitor.service && sudo systemctl enable RCO_Monitor",
-            "group": "none",
-            "presentation": {
-                "reveal": "always",
-                "panel": "new",
-                "showReuseMessage": true,
-                "clear": true,
-                "focus": true
-            },
-            "options": {
-                "cwd": "${workspaceFolder}/build/Release/bin"
-            },
             "problemMatcher": []
         }
     ]

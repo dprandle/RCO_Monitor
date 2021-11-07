@@ -4,6 +4,8 @@
 #include <fstream>
 #include <stdio.h>
 #include <cmath>
+#include <set>
+#include <random>
 
 #include "config_file.h"
 #include "utility.h"
@@ -35,16 +37,84 @@ const uint8_t RSTAT = 3;
 
 static int resp_len = 0;
 
+void default_radio_params(CM300_Radio * rad)
+{
+    rad->tx.forward_power = 0;
+    rad->tx.reverse_power = 0;
+    rad->tx.vswr = -1.0;
+    rad->tx.ptt_status = PTT_OFF;
+    rad->rx.agc = 1.61;
+    rad->rx.line_level = -46.0;
+    rad->rx.squelch_status = SQUELCH_CLOSED;
+}
+
+void create_simulated_radio_set(std::vector<CM300_Radio> & radios, int vcount, int ucount)
+{
+    std::string uprefix("2U");
+    std::set<int> used_rnums;
+
+    srand((unsigned)time(0));
+
+    for (int i = 0; i < vcount * 2; ++i)
+    {
+        CM300_Radio rad;
+        rad.serial = "2V";
+
+        if (i % 2)
+            rad.serial.push_back('T');
+        else
+            rad.serial.push_back('R');
+
+        int rnum = 0;
+        do
+        {
+            rnum = (rand() % 999999) + 1;
+        } while (!used_rnums.insert(rnum).second);
+        std::string numstr = std::to_string(rnum);
+        numstr.insert(0, 6 - numstr.size(), '0');
+        rad.serial.append(numstr);
+
+        rnum = (rand() % 1400) + 11800;
+        rad.freq_mhz = float(rnum) / 100.0;
+        default_radio_params(&rad);
+        radios.push_back(rad);
+    }
+    for (int i = 0; i < ucount * 2; ++i)
+    {
+        CM300_Radio rad;
+        rad.serial = "2U";
+
+        if (i % 2)
+            rad.serial.push_back('T');
+        else
+            rad.serial.push_back('R');
+
+        int rnum = 0;
+        do
+        {
+            rnum = (rand() % 999999) + 1;
+        } while (!used_rnums.insert(rnum).second);
+        std::string numstr = std::to_string(rnum);
+        numstr.insert(0, 6 - numstr.size(), '0');
+        rad.serial.append(numstr);
+
+        rnum = (rand() % 17500) + 22500;
+        rad.freq_mhz = float(rnum) / 100.0;
+        default_radio_params(&rad);
+        radios.push_back(rad);
+    }
+}
+
 std::string ptt_string(uint8_t status)
 {
-    if (status == PTT_LOCAL)
-        return "On (Local)";
+    if (status == PTT_OFF)
+        return "O";
+    else if (status == PTT_LOCAL)
+        return "L";
     else if (status == PTT_REMOTE)
-        return "On (Remote)";
+        return "R";
     else if (status == PTT_TEST_RF)
-        return "On (Test RF)";
-    else if (status == 0)
-        return "Off";
+        return "T";
     else
         return "Invalid";
 }
@@ -52,9 +122,9 @@ std::string ptt_string(uint8_t status)
 std::string squelch_string(uint8_t status)
 {
     if (status == SQUELCH_OPEN)
-        return "Open";
+        return "O";
     else if (status == SQUELCH_CLOSED)
-        return "Closed";
+        return "C";
     else
         return "Invalid";
 }
@@ -308,6 +378,19 @@ void Radio_Telnet::_set_options_from_config_file(Config_File * cfg)
         {
             elog("Error for dir_path is in parent json object {}", iter.key());
         }
+        if (!le.loptions.dir_path.empty())
+        {
+            if (mkdir(le.loptions.dir_path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == 0)
+            {
+                ilog("Created dir {} for log {}", le.loptions.dir_path, le.name);
+            }
+        }
+
+        le._backup_log_dir = util::get_home_dir() + "/csvlogs";
+        if (mkdir(le._backup_log_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == 0)
+        {
+            ilog("Created backup log dir {} for logger {}", le._backup_log_dir, le.name);
+        }
 
         try
         {
@@ -346,7 +429,6 @@ void Radio_Telnet::_set_options_from_config_file(Config_File * cfg)
 void Radio_Telnet::init(Config_File * config)
 {
     Subsystem::init(config);
-
     _set_options_from_config_file(config);
 
     int8_t size = (_ip_ub - _ip_lb + 1);
@@ -383,6 +465,14 @@ void Radio_Telnet::init(Config_File * config)
         ilog("Opened connection to radio at {} on socket fd {}", ip, rad.sk->fd());
         rad.cur_cmd = cmd::ind::FREQ;
         _radios.push_back(rad);
+    }
+
+    // Simulation
+    if (_radios.empty())
+    {
+        int vcount = size / 2 + size % 2;
+        int ucount = size - vcount;
+        create_simulated_radio_set(_radios, vcount, ucount);
     }
 }
 
@@ -453,12 +543,15 @@ bool _check_float_option(const Logger_Options & le, const std::string & param_na
     if (iter != le.item_options.end())
     {
         double change = std::abs(cur_val - prev_val);
-        double percent_change = change / std::abs(cur_val);
+        double percent_change = change;
+        if (!DEQUALS(percent_change, 0.0, EPS))
+            percent_change = (change / std::abs(cur_val));
+        percent_change *= 100.0;
 
         bool cond_change = (iter->second.change.enabled && (change > iter->second.change.val));
         bool cond_percent_change = (iter->second.percent_change.enabled && (percent_change > iter->second.percent_change.val));
 
-        if (le.log_changes_to_status && (cond_change || percent_change))
+        if (le.log_changes_to_status && (cond_change || cond_percent_change))
         {
             std::string pm(param_name);
             if (iter->second.title.enabled && !iter->second.title.val.empty())
@@ -502,7 +595,7 @@ void Logger_Entry::update_and_log_if_needed(const std::vector<CM300_Radio> & rad
             bool is_tx = (cur->radio_type() == TX_STR);
 
             // Always log on serial change or freq change
-            should_log = should_log || (cur->serial != prev->serial) || DEQUALS(cur->freq_mhz, prev->freq_mhz, EPS);
+            should_log = should_log || (cur->serial != prev->serial) || !DEQUALS(cur->freq_mhz, prev->freq_mhz, EPS);
 
             if (is_tx)
             {
@@ -534,7 +627,7 @@ void Logger_Entry::update_and_log_if_needed(const std::vector<CM300_Radio> & rad
 
 void Radio_Telnet::update()
 {
-    static std::vector<CM300_Radio *> initialized_radios;
+    static std::set<CM300_Radio *> initialized_radios;
     static bool all_radios_init = false;
 
     bool complete_scan = true;
@@ -547,13 +640,16 @@ void Radio_Telnet::update()
         _update(&(*iter));
         _update_closed(&(*iter));
 
-        if (iter->initialized())
-        {}
-
-        if (!prev.initialized() && iter->initialized())
+        if (iter->initialized() && initialized_radios.insert(&(*iter)).second)
         {
-            initialized_radios.push_back(&(*iter));
-            ilog("Radio at {} initialized:\n{}", iter->sk->get_ip(), iter->to_string());
+            if (iter->sk)
+            {
+                ilog("Radio at {} initialized:\n{}", iter->sk->get_ip(), iter->to_string());
+            }
+            else
+            {
+                ilog("Radio (no socket) initialized:\n{}", iter->to_string());
+            }
         }
 
         complete_scan = complete_scan && (iter->complete_scan_count > complete_scans);
@@ -633,7 +729,7 @@ std::string Logger_Entry::get_header()
         for (int i = 0; i < cur_row.size(); ++i)
         {
             if (i == 0)
-                first_row += std::to_string(rad->freq_mhz) + " " + rad->radio_range() + " " + rad->radio_type() + " (" + rad->serial + ")";
+                first_row += NUM_2_STR(rad->freq_mhz, 3) + " " + rad->radio_range() + " " + rad->radio_type() + " (" + rad->serial + ")";
             first_row += ",";
             second_row += cur_row[i] + ",";
         }
@@ -680,10 +776,10 @@ std::string Logger_Entry::get_row()
             if (MAP_CONTAINS(loptions.item_options, "line_level"))
                 cur_row.push_back(NUM_2_STR(rad->rx.line_level, 2));
         }
-
         for (int i = 0; i < cur_row.size(); ++i)
             row += cur_row[i] + ",";
     }
+
     if (!row.empty())
     {
         row.pop_back();
@@ -712,7 +808,7 @@ bool Logger_Entry::write_headers_to_file()
     std::ofstream output;
     std::string fname = get_fname();
 
-    if (util::file_exists(fname))
+    if (util::path_exists(fname))
     {
         std::string new_name = fname.substr(0, fname.size() - 4) + " (Stopped " + util::get_current_time_string() + ").csv";
         if (std::rename(fname.c_str(), new_name.c_str()) == 0)
@@ -738,9 +834,9 @@ bool Logger_Entry::write_headers_to_file()
         ilog("Could not open {}: {}", fname, strerror(errno));
         if (!loptions.dir_path.empty())
         {
-            ilog("Trying to open file in cwd instead of {}", loptions.dir_path);
+            ilog("Trying to open file in home dir instead of {}", loptions.dir_path);
             std::string saved = loptions.dir_path;
-            loptions.dir_path.clear();
+            loptions.dir_path = _backup_log_dir;
             bool result = write_headers_to_file();
             loptions.dir_path = saved;
             return result;
@@ -774,7 +870,10 @@ bool Logger_Entry::write_radio_data_to_file()
 void Radio_Telnet::_update(CM300_Radio * radio)
 {
     if (!radio->sk)
+    {
+        ++radio->complete_scan_count;
         return;
+    }
 
     uint32_t cnt = radio->sk->read(radio->response_buffer + radio->buffer_offset, BUFFER_SIZE - radio->buffer_offset);
     radio->buffer_offset += cnt; // buffer offset holds the new size

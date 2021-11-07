@@ -5,6 +5,9 @@
 #include <dirent.h>
 #include <fstream>
 #include <sstream>
+#include <pwd.h>
+#include <libgen.h>
+#include <linux/limits.h>
 
 #include "logger.h"
 #include "utility.h"
@@ -14,16 +17,34 @@ namespace util
 {
 static std::string locked_str;
 
+std::string get_home_dir()
+{
+    struct passwd * pw = getpwuid(getuid());
+    return pw->pw_dir;
+}
+
+std::string get_exe_dir()
+{
+    char result[PATH_MAX];
+    ssize_t count = readlink("/proc/self/exe", result, PATH_MAX);
+    const char * path = {};
+    if (count != -1)
+    {
+        path = dirname(result);
+    }
+    return path;
+}
+
 std::string & to_lower(std::string & s)
 {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); });
     return s;
 }
 
-bool file_exists(const std::string & name)
+bool path_exists(const std::string & name)
 {
-  struct stat buffer;   
-  return (stat (name.c_str(), &buffer) == 0); 
+    struct stat buffer;
+    return (stat(name.c_str(), &buffer) == 0);
 }
 
 bool save_data_to_file(uint8_t * data, uint32_t size, const char * fname, int mode_flags)
@@ -72,7 +93,7 @@ void delay(double ms)
 
 std::string formatted_date(tm * time_struct)
 {
-    return std::to_string(1900+time_struct->tm_year) + "-" + std::to_string(1 + time_struct->tm_mon) + "-" + std::to_string(time_struct->tm_mday);
+    return std::to_string(1900 + time_struct->tm_year) + "-" + std::to_string(1 + time_struct->tm_mon) + "-" + std::to_string(time_struct->tm_mday);
 }
 
 std::string formatted_time(tm * time_struct)
@@ -110,29 +131,29 @@ uint16_t files_in_dir(const char * dirname)
     }
     else
     {
-        wlog("Could not open directory {}",dirname);
+        wlog("Could not open directory {}", dirname);
     }
     return count;
 }
 
-uint16_t filenames_in_dir(const char * dirname, char ** & buffer)
+uint16_t filenames_in_dir(const char * dirname, char **& buffer)
 {
     uint16_t file_cnt = files_in_dir(dirname);
     if (file_cnt == 0)
         return file_cnt;
-    
+
     DIR * dir = opendir(dirname);
     dirent * ent;
-    buffer = (char**)malloc(file_cnt * sizeof(char*));
-    
+    buffer = (char **)malloc(file_cnt * sizeof(char *));
+
     uint16_t ind = 0;
     while ((ent = readdir(dir)))
-    {    
+    {
         if (ent->d_type == DT_REG)
         {
             uint32_t name_len = strlen(ent->d_name);
-            buffer[ind] = (char*)malloc(strlen(ent->d_name) + 1);
-            strcpy(buffer[ind],ent->d_name);
+            buffer[ind] = (char *)malloc(strlen(ent->d_name) + 1);
+            strcpy(buffer[ind], ent->d_name);
             ++ind;
         }
     }

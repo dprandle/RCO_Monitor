@@ -63,23 +63,29 @@ target_link_libraries(${TARGET_NAME}
   stdc++fs
   )
 
+if (${FACILITY_TYPE} STREQUAL RTR)
 add_custom_command(
     TARGET ${TARGET_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_SOURCE_DIR}/deploy
-    ${CMAKE_BINARY_DIR}/bin)
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_SOURCE_DIR}/deploy/ANCE_config.json
+    ${CMAKE_BINARY_DIR}/bin/config.json)
+else()
+add_custom_command(
+    TARGET ${TARGET_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_SOURCE_DIR}/deploy/RCO_config.json
+    ${CMAKE_BINARY_DIR}/bin/config.json)
+endif()
 
-# if (${CMAKE_BUILD_TYPE} STREQUAL Release)
-# add_custom_command(
-#     TARGET ${TARGET_NAME} POST_BUILD
-#     COMMAND ${CMAKE_COMMAND} -E copy
-#     ${CMAKE_BINARY_DIR}/bin/${TARGET_NAME}
-#     /home/ubuntu/bin/${TARGET_NAME})
+add_custom_command(
+    TARGET ${TARGET_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_SOURCE_DIR}/deploy/Radio_Monitor.service
+    ${CMAKE_BINARY_DIR}/bin/Radio_Monitor.service)
 
-# add_custom_command(
-#     TARGET ${TARGET_NAME} POST_BUILD
-#     COMMAND ${CMAKE_COMMAND} -E create_symlink
-#     /home/ubuntu/bin/${TARGET_NAME}
-#     /home/ubuntu/bin/${PROJECT_NAME}
-#     )
-# endif()
+add_custom_command(
+    TARGET ${TARGET_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E create_symlink
+    ${CMAKE_BINARY_DIR}/bin/${TARGET_NAME}
+    ${CMAKE_BINARY_DIR}/bin/${PROJECT_NAME}
+    )

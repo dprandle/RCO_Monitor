@@ -29,7 +29,9 @@ uint32_t hash_id(const char * to_hash);
 
 void delay(double ms);
 
-bool file_exists(const std::string & name);
+bool path_exists(const std::string & name);
+
+std::string get_home_dir();
 
 /// Get the count of files in the dir - ignores . and ..
 uint16_t files_in_dir(const char * dir);
@@ -37,6 +39,8 @@ uint16_t files_in_dir(const char * dir);
 /// Fill the buffer with all file names from dir - ignores . and ..
 /// Returns the size of the char* buffer with each element being a null terminated string
 uint16_t filenames_in_dir(const char * dir, char **& buffer);
+
+std::string get_exe_dir();
 
 template<class T>
 void zero_buf(T * buf, uint32_t size)

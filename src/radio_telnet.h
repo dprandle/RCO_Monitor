@@ -163,9 +163,12 @@ struct Logger_Entry
 
     Logger_Options loptions;
     double ms_counter;
+    std::string _backup_log_dir;
     std::string name;
     std::vector<CM300_Radio> prev_state;
 };
+
+void create_simulated_radio_set(std::vector<CM300_Radio> & radios, int vcount, int ucount);
 
 class Radio_Telnet : public Subsystem
 {

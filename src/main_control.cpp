@@ -25,7 +25,6 @@ Main_Control::~Main_Control()
 
 void Main_Control::init(Config_File * config)
 {
-    logger_->initialize();
     uint32_t len = util::buf_len(systems_);
     for (int i = 0; i < len; ++i)
         systems_[i]->init(config);
@@ -72,7 +71,6 @@ void Main_Control::release()
     uint32_t len = util::buf_len(systems_);
     for (int i = 0; i < len; ++i)
         systems_[i]->release();
-    logger_->terminate();
 }
 
 void Main_Control::update()
@@ -130,17 +128,37 @@ void Main_Control::remove_subsystem(const char * sysname)
 
 void Main_Control::start(const std::string & config_fname)
 {
+    logger_->initialize();
     ilog("Starting RCO Monitor");
     m_running = true;
     m_systimer->start();
-
     _config_fname = config_fname;
 
     Config_File cfg;
-    if (_config_fname.empty())
-        _config_fname = DEFAULT_CONFIG_FNAME;
-    if (!cfg.load(_config_fname))
-        wlog("Could not load config file {}: {}", _config_fname, strerror(errno));
+    bool loaded = cfg.load(_config_fname);
+    if (!loaded)
+    {
+        wlog("Could not load config file {}: {} - trying backup path", _config_fname, strerror(errno));
+        _config_fname = util::get_home_dir() + "/config.json";
+        loaded = cfg.load(_config_fname);
+        if (!loaded)
+        {
+            wlog("Also could not load config file at {}: {}",_config_fname, strerror(errno));
+            _config_fname = util::get_exe_dir() + "/config.json";
+            loaded = cfg.load(_config_fname);
+            if (!loaded)
+            {
+                wlog("Aaand finally, could not load config file at {}: {} - no radio logging will happen without config!",_config_fname, strerror(errno));
+                // Restore config name just in case
+                _config_fname = config_fname;
+            }
+        }
+    }
+
+    if (loaded)
+    {
+        ilog("Successfully loaded config file at {}", _config_fname);
+    }
 
     init(&cfg);
     while (running())
@@ -155,4 +173,5 @@ void Main_Control::stop()
     ilog("Stopping RCO Monitor - execution time {} ms", m_systimer->elapsed());
     m_running = false;
     release();
+    logger_->terminate();
 }

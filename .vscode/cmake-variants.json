@@ -8,6 +8,7 @@
                 "short": "Debug",
                 "long": "Build with debug symbols",
                 "settings": {
+                    "FACILITY_TYPE":"RTR",
                     "SPDLOG_BUILD_SHARED":true,
                     "SPDLOG_NO_EXCEPTIONS":true
                 }
@@ -18,6 +19,7 @@
                 "short": "Release",
                 "long": "Build without debug symbols",
                 "settings": {
+                    "FACILITY_TYPE":"RTR",
                     "SPDLOG_BUILD_SHARED":true,
                     "SPDLOG_NO_EXCEPTIONS":true
                 }

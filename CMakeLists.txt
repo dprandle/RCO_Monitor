@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-set(CURRENT_VERSION_MAJOR 1)
+set(CURRENT_VERSION_MAJOR 2)
 set(CURRENT_VERSION_MINOR 0)
 set(CURRENT_VERSION_PATCH 0)
 
@@ -19,9 +19,9 @@ set(LIGHTCTRL_SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_DEBUG_POSTFIX d)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Firmware/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Firmware/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Firmware/bin)
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
@@ -36,7 +36,7 @@ add_definitions(-DCURRENT_VERSION_PATCH=${CURRENT_VERSION_PATCH})
 SET(CMAKE_BUILD_WITH_INSTALL_RPATH true)
 
 # the RPATH to be used when installing
-SET(CMAKE_INSTALL_RPATH "/home/ubuntu/bin/spdlog")
+SET(CMAKE_INSTALL_RPATH "/home/ubuntu/lib/spdlog")
 
 # Set the src files for the project
 file(GLOB SRC_FILES "${LIGHTCTRL_SRC_DIR}/*.c*")
@@ -56,7 +56,6 @@ endif()
 
 # Adding executable
 add_executable(${TARGET_NAME} ${SRC_FILES})
-set_target_properties(${TARGET_NAME} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 
 target_link_libraries(${TARGET_NAME}
   pthread
@@ -64,28 +63,40 @@ target_link_libraries(${TARGET_NAME}
   )
 
 if (${FACILITY_TYPE} STREQUAL RTR)
-add_custom_command(
-    TARGET ${TARGET_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-    ${CMAKE_SOURCE_DIR}/deploy/ANCE_config.json
-    ${CMAKE_BINARY_DIR}/bin/config.json)
-else()
-add_custom_command(
-    TARGET ${TARGET_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-    ${CMAKE_SOURCE_DIR}/deploy/RCO_config.json
-    ${CMAKE_BINARY_DIR}/bin/config.json)
+file (COPY ${CMAKE_SOURCE_DIR}/cfg/ANCE_config.json 
+DESTINATION ${CMAKE_BINARY_DIR}/Firmware/bin
+FILE_PERMISSIONS OWNER_WRITE OWNER_READ GROUP_WRITE GROUP_READ WORLD_READ)
+file (RENAME ${CMAKE_BINARY_DIR}/Firmware/bin/ANCE_config.json ${CMAKE_BINARY_DIR}/Firmware/bin/config.json)
 endif()
 
-add_custom_command(
-    TARGET ${TARGET_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-    ${CMAKE_SOURCE_DIR}/deploy/Radio_Monitor.service
-    ${CMAKE_BINARY_DIR}/bin/Radio_Monitor.service)
 
-add_custom_command(
-    TARGET ${TARGET_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E create_symlink
-    ${CMAKE_BINARY_DIR}/bin/${TARGET_NAME}
-    ${CMAKE_BINARY_DIR}/bin/${PROJECT_NAME}
-    )
+file (COPY ${CMAKE_SOURCE_DIR}/cfg/RCO_config.json
+DESTINATION ${CMAKE_BINARY_DIR}/Firmware
+FILE_PERMISSIONS OWNER_WRITE OWNER_READ GROUP_WRITE GROUP_READ WORLD_READ)
+file (RENAME ${CMAKE_BINARY_DIR}/Firmware/RCO_config.json ${CMAKE_BINARY_DIR}/Firmware/config.json)
+
+file(WRITE ${CMAKE_BINARY_DIR}/tmp/enable_radio_monitor.sh
+"chmod +x ${TARGET_NAME} && ln -s ${TARGET_NAME} ${PROJECT_NAME}
+sudo systemctl link /home/ubuntu/${PROJECT_NAME}.service
+sudo systemctl enable ${PROJECT_NAME}
+sudo reboot")
+
+file (COPY ${CMAKE_BINARY_DIR}/tmp/enable_radio_monitor.sh 
+DESTINATION ${CMAKE_BINARY_DIR}/Firmware
+FILE_PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_WRITE GROUP_READ WORLD_EXECUTE WORLD_READ)
+
+file(WRITE ${CMAKE_BINARY_DIR}/Firmware/${PROJECT_NAME}.service
+"[Unit]
+Description=${PROJECT_NAME} service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=1
+User=ubuntu
+ExecStart=/home/ubuntu/bin/${PROJECT_NAME}
+WorkingDirectory=/home/ubuntu/bin
+
+[Install]
+WantedBy=multi-user.target")

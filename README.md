@@ -1,4 +1,4 @@
-# RCO Monitor
+# Radio Monitor
 
 Radio Logger is a service that runs on raspberry pi (Ubuntu Server) that can connect and talk with remote equipment. The goal of the service is to provide useful insight in to the state of a remote RCO communications site, and provide that information back to the control AFSS through the RCE modem link. A summary of the goals are listed below:
 

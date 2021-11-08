@@ -129,7 +129,7 @@ void Main_Control::remove_subsystem(const char * sysname)
 void Main_Control::start(const std::string & config_fname)
 {
     logger_->initialize();
-    ilog("Starting RCO Monitor");
+    ilog("Starting Radio Monitor");
     m_running = true;
     m_systimer->start();
     _config_fname = config_fname;
@@ -165,13 +165,13 @@ void Main_Control::start(const std::string & config_fname)
     {
         update();
     }
+    m_systimer->stop();
+    ilog("Stopping Radio Monitor - execution time {} ms", m_systimer->elapsed());
+    release();
+    logger_->terminate();
 }
 
 void Main_Control::stop()
 {
-    m_systimer->stop();
-    ilog("Stopping RCO Monitor - execution time {} ms", m_systimer->elapsed());
     m_running = false;
-    release();
-    logger_->terminate();
 }

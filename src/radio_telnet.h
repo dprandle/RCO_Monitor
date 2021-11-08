@@ -91,6 +91,8 @@ struct RX_Params
 struct CM300_Radio
 {
     CM300_Radio();
+    ~CM300_Radio();
+    
     std::string radio_type() const;
     std::string radio_range() const;
     std::string to_string() const;
@@ -217,7 +219,7 @@ class Radio_Telnet : public Subsystem
 
     bool _logging;
 
-    bool _simulate_if_no_radios;
+    bool _simulate_radios;
     uint32_t _simulation_period;
     uint32_t _simulated_high_vswr_period_count;
     uint32_t _simulated_random_sq_period_count;

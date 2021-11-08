@@ -26,6 +26,6 @@ char * parse_firmware_header(const Firmware_Header & fmh)
 {
     static char fname[50];
     memset(fname,0,50);
-    sprintf(fname, "/home/ubuntu/bin/RCO_Monitor-v%d.%d.%d.rpi",fmh.v_major,fmh.v_minor,fmh.v_patch);
+    sprintf(fname, "/home/ubuntu/bin/Radio_Monitor-v%d.%d.%d.rpi",fmh.v_major,fmh.v_minor,fmh.v_patch);
     return fname;
 }

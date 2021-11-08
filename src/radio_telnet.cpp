@@ -196,6 +196,12 @@ CM300_Radio::CM300_Radio()
       complete_scan_count(0)
 {}
 
+CM300_Radio::~CM300_Radio()
+{
+    if (sk)
+        delete sk;
+}
+
 std::string CM300_Radio::radio_type() const
 {
     std::string ret;
@@ -248,7 +254,7 @@ bool CM300_Radio::initialized() const
 
 Radio_Telnet::Radio_Telnet()
     : _logging(true),
-      _simulate_if_no_radios(false),
+      _simulate_radios(false),
       _simulation_period(2000),
       _simulated_high_vswr_period_count(30),
       _simulated_random_sq_period_count(5),
@@ -371,7 +377,7 @@ void Radio_Telnet::_set_options_from_config_file(Config_File * cfg)
     static bool added_status_log = false;
 
     cfg->fill_param_if_found("logging_enabled", &_logging);
-    cfg->fill_param_if_found("simulate_if_no_radios", &_simulate_if_no_radios);
+    cfg->fill_param_if_found("simulate_radios", &_simulate_radios);
     cfg->fill_param_if_found("simulation_period", &_simulation_period);
     cfg->fill_param_if_found("simulation_high_vswr_period_count", &_simulated_high_vswr_period_count);
     cfg->fill_param_if_found("simulation_random_squelch_break_period_count", &_simulated_random_sq_period_count);
@@ -449,45 +455,52 @@ void Radio_Telnet::init(Config_File * config)
     int8_t size = (_ip_ub - _ip_lb + 1);
     int64_t arg = 0;
 
-    for (int8_t i = 0; i < size; ++i)
+    if (_simulate_radios)
     {
-        std::string ip_last_octet = std::to_string(_ip_lb + i);
-        std::string ip = "192.168.102." + ip_last_octet;
-
-        CM300_Radio rad;
-        rad.sk = new Socket();
-
-        if (rad.sk->fd() == -1)
-        {
-            ilog("Failed to create socket for {} - error: ", ip, strerror(errno));
-            delete rad.sk;
-            continue;
-        }
-        ilog("Attempting to connect to radio at {} on socket fd {}", ip, rad.sk->fd());
-
-        if (rad.sk->connect(ip, 8081, _conn_timeout) != 0)
-        {
-            ilog("Connection timeout to {} - no radio found", ip, strerror(errno));
-            delete rad.sk;
-            continue;
-        }
-
-        if (!rad.sk->start())
-        {
-            ilog("Could not start socket for {} on threaded fd: {}", ip, Threaded_Fd::error_string(rad.sk->error()));
-            delete rad.sk;
-        }
-        ilog("Opened connection to radio at {} on socket fd {}", ip, rad.sk->fd());
-        rad.cur_cmd = cmd::ind::FREQ;
-        _radios.push_back(rad);
-    }
-
-    // Simulation
-    if (_radios.empty() && _simulate_if_no_radios)
-    {
-        int vcount = size / 2 + size % 2;
-        int ucount = size - vcount;
+        int radio_set_count = size / 2;
+        int vcount = radio_set_count / 2 + radio_set_count % 2;
+        int ucount = radio_set_count - vcount;
+        ilog("Simulate radios set to true in config - building simulation with {} VHF and {} UHF radio sets", vcount, ucount);
+        ilog("Simulation period set to {}ms, random squelch breaks every {} periods, and high VSWR on TX every {} periods",
+             _simulation_period,
+             _simulated_random_sq_period_count,
+             _simulated_high_vswr_period_count);
         create_simulated_radio_set(_radios, vcount, ucount);
+    }
+    else
+    {
+        for (int8_t i = 0; i < size; ++i)
+        {
+            std::string ip_last_octet = std::to_string(_ip_lb + i);
+            std::string ip = "192.168.102." + ip_last_octet;
+
+            CM300_Radio rad;
+            rad.sk = new Socket();
+
+            if (rad.sk->fd() == -1)
+            {
+                ilog("Failed to create socket for {} - error: ", ip, strerror(errno));
+                delete rad.sk;
+                continue;
+            }
+            ilog("Attempting to connect to radio at {} on socket fd {}", ip, rad.sk->fd());
+
+            if (rad.sk->connect(ip, 8081, _conn_timeout) != 0)
+            {
+                ilog("Connection timeout to {} - no radio found", ip, strerror(errno));
+                delete rad.sk;
+                continue;
+            }
+
+            if (!rad.sk->start())
+            {
+                ilog("Could not start socket for {} on threaded fd: {}", ip, Threaded_Fd::error_string(rad.sk->error()));
+                delete rad.sk;
+            }
+            ilog("Opened connection to radio at {} on socket fd {}", ip, rad.sk->fd());
+            rad.cur_cmd = cmd::ind::FREQ;
+            _radios.push_back(rad);
+        }
     }
 }
 
@@ -514,8 +527,8 @@ const Timeout_Interval & Radio_Telnet::get_connection_timeout() const
 void Radio_Telnet::release()
 {
     Subsystem::release();
-    for (int i = 0; i < _radios.size(); ++i)
-        delete _radios[i].sk;
+    // for (int i = 0; i < _radios.size(); ++i)
+    //     delete _radios[i].sk;
     _radios.clear();
 }
 
@@ -789,7 +802,7 @@ void Radio_Telnet::update()
         ++iter;
     }
 
-    if (_simulate_if_no_radios)
+    if (_simulate_radios)
         _simulated_radios_update();
 
     if (complete_scan)
@@ -1019,7 +1032,6 @@ void Radio_Telnet::_update(CM300_Radio * radio)
     {
         if (strncmp((char *)radio->response_buffer + (radio->buffer_offset - resp_len), RESPONSE_COMPLETE_STR, resp_len) == 0)
         {
-            //ilog("Received complete packet for {} at {} (buffer size: {})!", radio->cur_cmd, radio->sk->get_ip(), radio->buffer_offset);
             _parse_response_to_radio_data(radio);
             radio->buffer_offset = 0;
             radio->prev_cmd = radio->cur_cmd;

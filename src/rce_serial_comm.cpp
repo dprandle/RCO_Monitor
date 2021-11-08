@@ -137,7 +137,7 @@ void RCE_Serial_Comm::init(Config_File * config)
     rce_uart_->set_format(df);
 
     rce_uart_->start();
-    rce_uart_->write("Starting RCO Monitor\r");
+    rce_uart_->write("Starting Radio Monitor\r");
 }
 
 void RCE_Serial_Comm::release()

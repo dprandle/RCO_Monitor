@@ -132,9 +132,9 @@ struct Log_Option_Group
 
 struct Logger_Options
 {
-    Logger_Options(): dir_path(), frequency(0), log_changes_to_status(false) {}
+    Logger_Options(): dir_path(), period(0), log_changes_to_status(false) {}
     std::string dir_path;
-    uint32_t frequency;
+    uint32_t period;
     bool log_changes_to_status;
 
     /* 
@@ -213,8 +213,15 @@ class Radio_Telnet : public Subsystem
     void _parse_response_to_radio_data(CM300_Radio * radio);
     void _extract_string_to_radio(CM300_Radio * radio, const std::string & str);
     void _set_options_from_config_file(Config_File * cfg);
+    void _simulated_radios_update();
 
     bool _logging;
+
+    bool _simulate_if_no_radios;
+    uint32_t _simulation_period;
+    uint32_t _simulated_high_vswr_period_count;
+    uint32_t _simulated_random_sq_period_count;
+
     int8_t _ip_lb;
     int8_t _ip_ub;
     uint8_t _max_retry_count;

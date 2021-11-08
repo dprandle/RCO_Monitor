@@ -25,7 +25,7 @@ Gpio::Gpio(int pin)
     }
     else
     {
-        write(fd, buffer, n);
+        size_t success = write(fd, buffer, n);
         close(fd);
     }
 }
@@ -55,7 +55,7 @@ Gpio::~Gpio()
     }
     else
     {
-        write(fd, buffer, n);
+        size_t result = write(fd, buffer, n);
         close(fd);
     }
 }
@@ -407,7 +407,7 @@ void Gpio::_exec()
         if (poll(&polldes, 1, -1) == 1 && polldes.revents & POLLPRI)
         {
             lseek(polldes.fd, 0, SEEK_SET);
-            read(polldes.fd, &r_val, 1);
+            size_t result = read(polldes.fd, &r_val, 1);
             lseek(polldes.fd, 0, SEEK_SET);
             m_isr = true;
         }

@@ -55,17 +55,22 @@ void create_simulated_radio_set(std::vector<CM300_Radio> & radios, int vcount, i
 
     srand((unsigned)time(0));
 
+    double f = 0;
     for (int i = 0; i < vcount * 2; ++i)
     {
         CM300_Radio rad;
+        int rnum = 0;
         rad.serial = "2V";
 
         if (i % 2)
             rad.serial.push_back('T');
         else
+        {
             rad.serial.push_back('R');
+            rnum = (rand() % 1400) + 11800;
+            f = double(rnum) / 100.0;
+        }
 
-        int rnum = 0;
         do
         {
             rnum = (rand() % 999999) + 1;
@@ -74,8 +79,7 @@ void create_simulated_radio_set(std::vector<CM300_Radio> & radios, int vcount, i
         numstr.insert(0, 6 - numstr.size(), '0');
         rad.serial.append(numstr);
 
-        rnum = (rand() % 1400) + 11800;
-        rad.freq_mhz = float(rnum) / 100.0;
+        rad.freq_mhz = f;
         default_radio_params(&rad);
         radios.push_back(rad);
     }
@@ -83,13 +87,17 @@ void create_simulated_radio_set(std::vector<CM300_Radio> & radios, int vcount, i
     {
         CM300_Radio rad;
         rad.serial = "2U";
+        int rnum = 0;
 
         if (i % 2)
             rad.serial.push_back('T');
         else
+        {
             rad.serial.push_back('R');
+            rnum = (rand() % 1400) + 11800;
+            f = double(rnum) / 100.0;
+        }
 
-        int rnum = 0;
         do
         {
             rnum = (rand() % 999999) + 1;
@@ -98,8 +106,7 @@ void create_simulated_radio_set(std::vector<CM300_Radio> & radios, int vcount, i
         numstr.insert(0, 6 - numstr.size(), '0');
         rad.serial.append(numstr);
 
-        rnum = (rand() % 17500) + 22500;
-        rad.freq_mhz = float(rnum) / 100.0;
+        rad.freq_mhz = f;
         default_radio_params(&rad);
         radios.push_back(rad);
     }
@@ -108,13 +115,13 @@ void create_simulated_radio_set(std::vector<CM300_Radio> & radios, int vcount, i
 std::string ptt_string(uint8_t status)
 {
     if (status == PTT_OFF)
-        return "O";
+        return "Off";
     else if (status == PTT_LOCAL)
-        return "L";
+        return "Key(L)";
     else if (status == PTT_REMOTE)
-        return "R";
+        return "Key(R)";
     else if (status == PTT_TEST_RF)
-        return "T";
+        return "Key(T)";
     else
         return "Invalid";
 }
@@ -122,9 +129,9 @@ std::string ptt_string(uint8_t status)
 std::string squelch_string(uint8_t status)
 {
     if (status == SQUELCH_OPEN)
-        return "O";
+        return "Open";
     else if (status == SQUELCH_CLOSED)
-        return "C";
+        return "Clsd";
     else
         return "Invalid";
 }
@@ -241,6 +248,10 @@ bool CM300_Radio::initialized() const
 
 Radio_Telnet::Radio_Telnet()
     : _logging(true),
+      _simulate_if_no_radios(false),
+      _simulation_period(2000),
+      _simulated_high_vswr_period_count(30),
+      _simulated_random_sq_period_count(5),
       _ip_lb(10),
       _ip_ub(13),
       _max_retry_count(10),
@@ -290,15 +301,15 @@ void parse_item_groupj(const nlohmann::json & source, const std::string & name, 
                     util::to_lower(str);
                     if (str.find("off") != std::string::npos)
                         log.equal.val |= PTT_OFF;
-                    if (str.find("local") != std::string::npos)
+                    if (str.find("loc") != std::string::npos)
                         log.equal.val |= PTT_LOCAL;
-                    if (str.find("remote") != std::string::npos)
+                    if (str.find("rem") != std::string::npos)
                         log.equal.val |= PTT_REMOTE;
-                    if (str.find("test_rf") != std::string::npos)
+                    if (str.find("test") != std::string::npos)
                         log.equal.val |= PTT_TEST_RF;
                     if (str.find("open") != std::string::npos)
                         log.equal.val |= SQUELCH_OPEN;
-                    if (str.find("closed") != std::string::npos)
+                    if (str.find("clos") != std::string::npos)
                         log.equal.val |= SQUELCH_CLOSED;
                 }
             }
@@ -360,6 +371,10 @@ void Radio_Telnet::_set_options_from_config_file(Config_File * cfg)
     static bool added_status_log = false;
 
     cfg->fill_param_if_found("logging_enabled", &_logging);
+    cfg->fill_param_if_found("simulate_if_no_radios", &_simulate_if_no_radios);
+    cfg->fill_param_if_found("simulation_period", &_simulation_period);
+    cfg->fill_param_if_found("simulation_high_vswr_period_count", &_simulated_high_vswr_period_count);
+    cfg->fill_param_if_found("simulation_random_squelch_break_period_count", &_simulated_random_sq_period_count);
     cfg->fill_param_if_found("ip_lower_bound", &_ip_lb);
     cfg->fill_param_if_found("ip_upper_bound", &_ip_ub);
     cfg->fill_param_if_found("loggers", &obj);
@@ -394,11 +409,11 @@ void Radio_Telnet::_set_options_from_config_file(Config_File * cfg)
 
         try
         {
-            fill_param_if_found(*iter, "frequency", &le.loptions.frequency);
+            fill_param_if_found(*iter, "period", &le.loptions.period);
         }
         catch (nlohmann::detail::exception & e)
         {
-            elog("Error for frequency is in parent json object {}", iter.key());
+            elog("Error for period is in parent json object {}", iter.key());
         }
 
         try
@@ -468,7 +483,7 @@ void Radio_Telnet::init(Config_File * config)
     }
 
     // Simulation
-    if (_radios.empty())
+    if (_radios.empty() && _simulate_if_no_radios)
     {
         int vcount = size / 2 + size % 2;
         int ucount = size - vcount;
@@ -584,7 +599,7 @@ void Logger_Entry::update_and_log_if_needed(const std::vector<CM300_Radio> & rad
     ms_counter += edm.sys_timer()->dt();
     bool should_log = false;
 
-    if (ms_counter >= loptions.frequency)
+    if (ms_counter >= loptions.period)
     {
         ms_counter = 0;
 
@@ -597,18 +612,37 @@ void Logger_Entry::update_and_log_if_needed(const std::vector<CM300_Radio> & rad
             // Always log on serial change or freq change
             should_log = should_log || (cur->serial != prev->serial) || !DEQUALS(cur->freq_mhz, prev->freq_mhz, EPS);
 
-            if (is_tx)
+            if (loptions.log_changes_to_status)
             {
-                should_log = should_log || _check_status_option(loptions, "ptt_status", cur->tx.ptt_status, prev->tx.ptt_status, cur);
-                should_log = should_log || _check_float_option(loptions, "forward_power", cur->tx.forward_power, prev->tx.forward_power, cur);
-                should_log = should_log || _check_float_option(loptions, "reverse_power", cur->tx.reverse_power, prev->tx.reverse_power, cur);
-                should_log = should_log || _check_float_option(loptions, "vswr", cur->tx.vswr, prev->tx.vswr, cur);
+                if (is_tx)
+                {
+                    should_log = _check_status_option(loptions, "ptt_status", cur->tx.ptt_status, prev->tx.ptt_status, cur) || should_log;
+                    should_log = _check_float_option(loptions, "forward_power", cur->tx.forward_power, prev->tx.forward_power, cur) || should_log;
+                    should_log = _check_float_option(loptions, "reverse_power", cur->tx.reverse_power, prev->tx.reverse_power, cur) || should_log;
+                    should_log = _check_float_option(loptions, "vswr", cur->tx.vswr, prev->tx.vswr, cur) || should_log;
+                }
+                else
+                {
+                    should_log = _check_status_option(loptions, "squelch_status", cur->rx.squelch_status, prev->rx.squelch_status, cur) || should_log;
+                    should_log = _check_float_option(loptions, "agc", cur->rx.agc, prev->rx.agc, cur) || should_log;
+                    should_log = _check_float_option(loptions, "line_level", cur->rx.line_level, prev->rx.line_level, cur) || should_log;
+                }
             }
             else
             {
-                should_log = should_log || _check_status_option(loptions, "squelch_status", cur->rx.squelch_status, prev->rx.squelch_status, cur);
-                should_log = should_log || _check_float_option(loptions, "agc", cur->rx.agc, prev->rx.agc, cur);
-                should_log = should_log || _check_float_option(loptions, "line_level", cur->rx.line_level, prev->rx.line_level, cur);
+                if (is_tx)
+                {
+                    should_log = should_log || _check_status_option(loptions, "ptt_status", cur->tx.ptt_status, prev->tx.ptt_status, cur);
+                    should_log = should_log || _check_float_option(loptions, "forward_power", cur->tx.forward_power, prev->tx.forward_power, cur);
+                    should_log = should_log || _check_float_option(loptions, "reverse_power", cur->tx.reverse_power, prev->tx.reverse_power, cur);
+                    should_log = should_log || _check_float_option(loptions, "vswr", cur->tx.vswr, prev->tx.vswr, cur);
+                }
+                else
+                {
+                    should_log = should_log || _check_status_option(loptions, "squelch_status", cur->rx.squelch_status, prev->rx.squelch_status, cur);
+                    should_log = should_log || _check_float_option(loptions, "agc", cur->rx.agc, prev->rx.agc, cur);
+                    should_log = should_log || _check_float_option(loptions, "line_level", cur->rx.line_level, prev->rx.line_level, cur);
+                }
             }
         }
     }
@@ -622,6 +656,105 @@ void Logger_Entry::update_and_log_if_needed(const std::vector<CM300_Radio> & rad
     {
         prev_state = radios;
         write_radio_data_to_file();
+    }
+}
+
+void Radio_Telnet::_simulated_radios_update()
+{
+    static double counter = 0;
+    static int counter_high_vswr = 0;
+    static int counter_rx_squelch = 0;
+
+    counter += edm.sys_timer()->dt();
+
+    static size_t tx_ind = 1;
+    static uint8_t CUR_PTT_STATE = PTT_LOCAL;
+    static size_t rx_squelch_break_ind = -1;
+
+    // Simulate PTT on cycling radios (RX and TX) switching the radio every 2 seconds
+    // Also generate a high VSWR on a transmitter every minute
+    // Finally, generate random radio squelch breaks every 10 seconds - should always be on a radio that is not currently keyed
+    if (counter > _simulation_period)
+    {
+        ++counter_rx_squelch;
+        // If the corresponding transmitter is not keyed, then close the randomly generated squelch break previously opened
+        if (rx_squelch_break_ind != -1 && ((rx_squelch_break_ind != (tx_ind - 1)) || (_radios.size() == 1)))
+        {
+            _radios[rx_squelch_break_ind].rx.squelch_status = SQUELCH_CLOSED;
+            _radios[rx_squelch_break_ind].rx.agc = 1.61;
+            _radios[rx_squelch_break_ind].rx.line_level = -46.0;
+            rx_squelch_break_ind = -1;
+        }
+
+        // Every 10 seconds generate a random squelch break
+        if (counter_rx_squelch == _simulated_random_sq_period_count)
+        {
+            // Generate a random receiver squelch break index
+            do
+            {
+                rx_squelch_break_ind = (rand() % _radios.size() / 2) * 2;
+            } while ((rx_squelch_break_ind == (tx_ind - 1)) && (_radios.size() > 1));
+            _radios[rx_squelch_break_ind].rx.squelch_status = SQUELCH_OPEN;
+            _radios[rx_squelch_break_ind].rx.agc = 2.3;
+            _radios[rx_squelch_break_ind].rx.line_level = -8.0;
+            counter_rx_squelch = 0;
+        }
+
+        if (tx_ind < _radios.size())
+        {
+            CM300_Radio * cur = &_radios[tx_ind];
+            CM300_Radio * cur_rx = cur - 1;
+
+            int prev_tx_index = tx_ind - 2;
+            if (prev_tx_index < 0)
+                prev_tx_index = _radios.size() - 1;
+
+            cur->tx.ptt_status = CUR_PTT_STATE;
+            cur->tx.forward_power = 12;
+            cur->tx.vswr = 1.0;
+            cur_rx->rx.squelch_status = SQUELCH_OPEN;
+            cur_rx->rx.line_level = -8;
+            cur_rx->rx.agc = 2.3;
+
+            if (prev_tx_index != tx_ind)
+            {
+                CM300_Radio * prev_tx = &_radios[prev_tx_index];
+                CM300_Radio * prev_rx = prev_tx - 1;
+
+                prev_tx->tx.ptt_status = PTT_OFF;
+                prev_tx->tx.forward_power = 0;
+                prev_tx->tx.vswr = -1.0;
+
+                // Only turn off the previous RX squelch if it isn't the random one we opened squelch on this round
+                if ((prev_tx_index - 1) != rx_squelch_break_ind)
+                {
+                    prev_rx->rx.squelch_status = SQUELCH_CLOSED;
+                    prev_rx->rx.line_level = -46.0;
+                    prev_rx->rx.agc = 1.61;
+                }
+            }
+
+            // Give a TX high VSWR once every minute
+            ++counter_high_vswr;
+            if (counter_high_vswr == _simulated_high_vswr_period_count)
+            {
+                cur->tx.forward_power = 12.0;
+                cur->tx.reverse_power = 2.2041;
+                cur->tx.vswr = 2.5;
+                counter_high_vswr = 0;
+            }
+
+            tx_ind += 2;
+            if (tx_ind > _radios.size())
+            {
+                tx_ind = 1;
+                CUR_PTT_STATE *= 2;
+                if (CUR_PTT_STATE > PTT_TEST_RF)
+                    CUR_PTT_STATE = PTT_LOCAL;
+            }
+        }
+
+        counter = 0;
     }
 }
 
@@ -655,6 +788,10 @@ void Radio_Telnet::update()
         complete_scan = complete_scan && (iter->complete_scan_count > complete_scans);
         ++iter;
     }
+
+    if (_simulate_if_no_radios)
+        _simulated_radios_update();
+
     if (complete_scan)
     {
         if (all_radios_init && _logging)
@@ -834,7 +971,7 @@ bool Logger_Entry::write_headers_to_file()
         ilog("Could not open {}: {}", fname, strerror(errno));
         if (!loptions.dir_path.empty())
         {
-            ilog("Trying to open file in home dir instead of {}", loptions.dir_path);
+            ilog("Trying to open file in {} instead of {}", _backup_log_dir, loptions.dir_path);
             std::string saved = loptions.dir_path;
             loptions.dir_path = _backup_log_dir;
             bool result = write_headers_to_file();
@@ -859,7 +996,7 @@ bool Logger_Entry::write_radio_data_to_file()
     else if (!loptions.dir_path.empty())
     {
         std::string saved = loptions.dir_path;
-        loptions.dir_path.clear();
+        loptions.dir_path = _backup_log_dir;
         bool result = write_radio_data_to_file();
         loptions.dir_path = saved;
         return result;

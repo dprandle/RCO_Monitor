@@ -11,7 +11,9 @@ Config_File::Config_File()
 {}
 
 Config_File::~Config_File()
-{}
+{
+    _config_obj.clear();
+}
 
 bool Config_File::load(const std::string & fname)
 {
@@ -20,7 +22,16 @@ bool Config_File::load(const std::string & fname)
         return false;
     _strip_comments(input_txt);
     _strip_empty_lines(input_txt);
-    _config_obj = json::parse(input_txt);
+    try
+    {
+        _config_obj = json::parse(input_txt);
+    }
+    catch (const nlohmann::json::exception & e)
+    {
+        elog("Could not load config file - formatting error: {} - please fix", e.what());
+        _config_obj.clear();
+        return false;
+    }
     return true;
 }
 
@@ -35,8 +46,9 @@ void Config_File::_strip_comments(std::string & str)
     while (pos != std::string::npos)
     {
         size_t nlpos = str.find('\n', pos);
-        str.erase(pos, nlpos-pos);
+        str.erase(pos, nlpos - pos);
         pos = str.find("//");
+
     }
 }
 
@@ -47,14 +59,14 @@ void Config_File::_strip_empty_lines(std::string & str)
     {
         if (pos)
             ++pos;
-        
+
         size_t nlpos = str.find('\n', pos);
         if (str.find_first_not_of(' ', pos) == nlpos)
         {
             if (nlpos == std::string::npos)
-                str.erase(pos,nlpos);
+                str.erase(pos, nlpos);
             else
-                str.erase(pos, nlpos-pos+1);
+                str.erase(pos, nlpos - pos + 1);
         }
         else
         {

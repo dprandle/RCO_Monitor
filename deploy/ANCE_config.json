@@ -1,5 +1,9 @@
 {
     "logging_enabled": true,
+    "simulate_if_no_radios": true,
+    "simulation_period": 1000,
+    "simulation_high_vswr_period_count": 5,
+    "simulation_random_squelch_break_period_count": 7,
     "ip_lower_bound": 5,
     "ip_upper_bound": 8,
     "max_radio_retry_reconnect_count": 10,
@@ -8,77 +12,18 @@
         "microseconds": 100000
     },
     "loggers": {
-        // "Everything_200ms": {
-        //     "dir_path":"/home/ubuntu/32gstick",
-        //     "frequency": 200,
-        //     "ptt_status": {
-        //         "title": "PTT",
-        //         "equal":"OFF | LOCAL | REMOTE | TEST_RF"
-        //     },
-        //     "squelch_status": {
-        //         "title": "Squelch"
-        //     },
-        //     "forward_power": {
-        //         "title": "Fwd Pwr"
-        //     },
-        //     "reverse_power": {
-        //         "title": "Rev Pwr"
-        //     },
-        //     "vswr": {
-        //         "title": "VSWR"
-        //     },
-        //     "agc": {
-        //         "title": "AGC"
-        //     },
-        //     "line_level": {
-        //         "title": "Line Lvl"
-        //     }
-        // },
-        // "PTT_SQ_Active_And_Changed_200ms": {
-        //     "dir_path":"/home/ubuntu/32gstick",
-        //     "frequency": 200,
-        //     "ptt_status": {
-        //         "title": "PTT",
-        //         "change": true,
-        //         "equal":"LOCAL | REMOTE | TEST_RF"
-        //     },
-        //     "squelch_status": {
-        //         "title": "Squelch"
-        //     },
-        //     "forward_power": {
-        //         "title": "Fwd Pwr"
-        //     },
-        //     "reverse_power": {
-        //         "title": "Rev Pwr"
-        //     },
-        //     "vswr": {
-        //         "title": "VSWR"
-        //     },
-        //     "agc": {
-        //         "title": "AGC"
-        //     },
-        //     "line_level": {
-        //         "title": "Line Lvl"
-        //     }
-        // },
-        "PTT_SQ_Changed_Always": {
-            "log_changes_to_status": true,
-            "dir_path":"/home/ubuntu/32gstick",
-            "frequency": 2000,
+        "All_500ms": {
+            "dir_path":"/media/usb0/csvlogs",
+            "period": 500,
             "ptt_status": {
                 "title": "PTT",
-                "change": true
+                "equal":"OFF | LOCAL | REMOTE | TEST_RF"
             },
             "squelch_status": {
-                "title": "Squelch",
-                "change": true,
-                "equal": "OPEN | CLOSED"
+                "title": "Squelch"
             },
             "forward_power": {
                 "title": "Fwd Pwr"
-            },
-            "reverse_power": {
-                "title": "Rev Pwr"
             },
             "vswr": {
                 "title": "VSWR"
@@ -89,20 +34,56 @@
             "line_level": {
                 "title": "Line Lvl"
             }
-        }//,
-        // "High_VSWR_500ms": {
-        //     "dir_path":"/home/ubuntu/32gstick",
-        //     "frequency": 500,
-        //     "forward_power": {
-        //         "title": "Fwd Pwr"
-        //     },
-        //     "reverse_power": {
-        //         "title": "Rev Pwr"
-        //     },
-        //     "vswr": {
-        //         "title":"VSWR",
-        //         "greater_than": 1.7
-        //     }
-        // }
+        },
+        "PTT_SQ_Active_Changed_250ms": {
+            "dir_path":"/media/usb0/csvlogs",
+            "period": 250,
+            "ptt_status": {
+                "title": "PTT",
+                "change": true,
+                "equal":"LOCAL | REMOTE | TEST_RF"
+            },
+            "squelch_status": {
+                "title": "Squelch",
+                "change":true,
+                "equal":"OPEN"
+            },
+            "forward_power": {
+                "title": "Fwd Pwr"
+            },
+            "vswr": {
+                "title": "VSWR"
+            },
+            "agc": {
+                "title": "AGC"
+            },
+            "line_level": {
+                "title": "Line Lvl"
+            }
+        },
+        "PTT_SQ_Changed_Always_100ms": {
+            "log_changes_to_status": true,
+            "dir_path":"/media/usb0/csvlogs",
+            "period": 100,
+            "ptt_status": {
+                "title": "PTT",
+                "change": true
+            },
+            "squelch_status": {
+                "title": "Squelch",
+                "change": true
+            }
+        },
+        "High_VSWR_500ms": {
+            "dir_path":"/media/usb0/csvlogs",
+            "period": 1000,
+            "forward_power": {
+                "title": "Fwd Pwr"
+            },
+            "vswr": {
+                "title":"VSWR",
+                "greater_than": 1.7
+            }
+        }
     }
 }

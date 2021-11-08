@@ -161,6 +161,29 @@ uint16_t filenames_in_dir(const char * dirname, char **& buffer)
     return file_cnt;
 }
 
+std::vector<std::string> filenames_in_dir(const std::string & dirname, const std::string & grep_str)
+{
+    std::vector<std::string> fnames;
+    uint16_t file_cnt = files_in_dir(dirname.c_str());
+    if (file_cnt == 0)
+        return fnames;
+
+    DIR * dir = opendir(dirname.c_str());
+    dirent * ent;
+
+    while ((ent = readdir(dir)))
+    {
+        if (ent->d_type == DT_REG)
+        {
+            std::string fname(ent->d_name);
+            if (grep_str.empty() || fname.find(grep_str) != std::string::npos)
+                fnames.push_back(ent->d_name);
+        }
+    }
+    closedir(dir);
+    return fnames;
+}
+
 uint32_t hash_id(const char * str)
 {
     uint32_t hash = 5381;

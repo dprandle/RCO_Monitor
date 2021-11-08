@@ -37,13 +37,18 @@ class Main_Control
 
     bool running();
 
+    // Load config file into cfg using the paths available
+    bool load_config(Config_File * cfg);
+
 	void init(Config_File * config);
 	
     void release();
 
     void restart_updated(const char * exe_path, const char * const params[]);
 
-    void start(const std::string & config_fname);
+    bool thumb_drive_detected();
+
+    void start();
 
     const std::string & get_config_fname();
 

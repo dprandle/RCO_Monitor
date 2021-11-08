@@ -527,8 +527,8 @@ const Timeout_Interval & Radio_Telnet::get_connection_timeout() const
 void Radio_Telnet::release()
 {
     Subsystem::release();
-    // for (int i = 0; i < _radios.size(); ++i)
-    //     delete _radios[i].sk;
+    complete_scans = 0;
+    _cur_cmd = 0;
     _radios.clear();
 }
 

@@ -1,5 +1,6 @@
 #include <unistd.h>
 #include <vector>
+#include <sys/mount.h>
 
 #include "utility.h"
 #include "main_control.h"
@@ -52,9 +53,15 @@ void Main_Control::restart_updated(const char * exe_path, const char * const par
     {
         free(arr);
         elog("Could not restart {} - error: {}", exe_path, strerror(errno));
-        start(_config_fname);
+        start();
     }
 }
+
+bool Main_Control::thumb_drive_detected()
+{
+    return util::path_exists("/dev/sda");
+}
+
 
 const std::string & Main_Control::get_config_fname()
 {
@@ -126,36 +133,69 @@ void Main_Control::remove_subsystem(const char * sysname)
     }
 }
 
-void Main_Control::start(const std::string & config_fname)
+bool Main_Control::load_config(Config_File * cfg)
+{
+    // If a thumb drive is avialable, try to mount it
+    if (thumb_drive_detected())
+    {
+        std::string mntpoint = "/media/usb0";
+        if (mkdir(mntpoint.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == 0)
+        {
+            ilog("Created thumb drive mount point {} - attempting to mount", mntpoint);
+            if (mount("/dev/sda1", mntpoint.c_str(), "vfat", MS_NOATIME, NULL) == 0)
+            {
+                ilog("Successfully mounted /dev/sda1 tp {}", mntpoint);
+            }
+            else
+            {
+                rmdir(mntpoint.c_str());
+                wlog("Could not mount /dev/sda1 to {}: {}", mntpoint, strerror(errno));
+            }
+        }
+        else
+        {
+            ilog("Could not create mount point {} for thumb drive: {}", mntpoint, strerror(errno));
+        }
+    }
+    else
+    {
+        ilog("No thumb drive detected");
+    }
+
+    _config_fname = THUMB_DRIVE_MNT_DIR + "/config.json";
+    bool loaded = cfg->load(_config_fname);
+    if (!loaded)
+    {
+        wlog("Could not load config file {}: {} - trying backup path", _config_fname, strerror(errno));
+        _config_fname = util::get_home_dir() + "/config.json";
+        loaded = cfg->load(_config_fname);
+        if (!loaded)
+        {
+            wlog("Also could not load config file at {}: {}", _config_fname, strerror(errno));
+            _config_fname = util::get_exe_dir() + "/config.json";
+            loaded = cfg->load(_config_fname);
+            if (!loaded)
+            {
+                wlog("Aaand finally, could not load config file at {}: {} - no radio logging will happen without config!",
+                     _config_fname,
+                     strerror(errno));
+                _config_fname = THUMB_DRIVE_MNT_DIR + "/config.json";
+            }
+        }
+    }
+    return loaded;
+}
+
+void Main_Control::start()
 {
     logger_->initialize();
     ilog("Starting Radio Monitor");
     m_running = true;
     m_systimer->start();
-    _config_fname = config_fname;
+    std::string default_config = THUMB_DRIVE_MNT_DIR + "/config.json";
 
     Config_File cfg;
-    bool loaded = cfg.load(_config_fname);
-    if (!loaded)
-    {
-        wlog("Could not load config file {}: {} - trying backup path", _config_fname, strerror(errno));
-        _config_fname = util::get_home_dir() + "/config.json";
-        loaded = cfg.load(_config_fname);
-        if (!loaded)
-        {
-            wlog("Also could not load config file at {}: {}",_config_fname, strerror(errno));
-            _config_fname = util::get_exe_dir() + "/config.json";
-            loaded = cfg.load(_config_fname);
-            if (!loaded)
-            {
-                wlog("Aaand finally, could not load config file at {}: {} - no radio logging will happen without config!",_config_fname, strerror(errno));
-                // Restore config name just in case
-                _config_fname = config_fname;
-            }
-        }
-    }
-
-    if (loaded)
+    if (load_config(&cfg))
     {
         ilog("Successfully loaded config file at {}", _config_fname);
     }

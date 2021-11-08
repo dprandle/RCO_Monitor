@@ -3,6 +3,7 @@
 #include <bits/stdint-intn.h>
 #include <inttypes.h>
 #include <string>
+#include <vector>
 
 #define BITS_SET(flag, bitmask) ((flag & bitmask) == bitmask)
 #define BITS_SET_ANY(flag, bitmask) ((flag & bitmask) > 0)
@@ -35,6 +36,8 @@ std::string get_home_dir();
 
 /// Get the count of files in the dir - ignores . and ..
 uint16_t files_in_dir(const char * dir);
+
+std::vector<std::string> filenames_in_dir(const std::string & dirname, const std::string & grep_str);
 
 /// Fill the buffer with all file names from dir - ignores . and ..
 /// Returns the size of the char* buffer with each element being a null terminated string

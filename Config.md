@@ -34,7 +34,7 @@ Each of the items above can trigger a log entry to be added to the csv log file.
 
 For example, to log all included radio properties every scan, you could do:
 
-```json
+```json5
 {
     // etc
     "period": 500,
@@ -63,7 +63,7 @@ For example, to log all included radio properties every scan, you could do:
 Since the condition to log ptt_status includes all possible states, this would always be true and an entry would be added to the csv log file every 500ms. The entry would include not just include PTT info, it would include squelch_status, forward_power, vswr, agc, and line_level for all radios connected to the network (as scanned at startup). Notice, it would not include reverse_power, since it was ommitted.
 
 Say instead you had the following:
-```json
+```json5
 {
     // etc
     "period": 500,
@@ -83,7 +83,7 @@ This would scan every 500ms, but only add an entry to the csv log file if one of
 
 If the top level property "simulate_radios" is set to true, ie as shown here:
 
-```json
+```json5
 {
     "logging_enabled": true,
     "simulate_radios": true,

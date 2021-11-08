@@ -74,7 +74,7 @@
                 "change": true
             }
         },
-        "High_VSWR_500ms": {
+        "High_VSWR_1000ms": {
             "dir_path":"/media/usb0/csvlogs",
             "period": 1000,
             "forward_power": {

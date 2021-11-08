@@ -11,7 +11,7 @@
     "loggers": {
         "PTT_SQ_Active_Changed_250ms": {
             "dir_path":"/home/ubuntu/csvlogs",
-            "period": 200,
+            "period": 250,
             "ptt_status": {
                 "title": "PTT",
                 "change": true,
@@ -35,7 +35,7 @@
                 "title": "Line Lvl"
             }
         },
-        "High_VSWR_500ms": {
+        "High_VSWR_1000ms": {
             "dir_path":"/home/ubuntu/csvlogs",
             "period": 1000,
             "forward_power": {

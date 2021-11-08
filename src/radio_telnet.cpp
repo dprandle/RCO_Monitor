@@ -708,7 +708,7 @@ void Radio_Telnet::_simulated_radios_update()
                 rx_squelch_break_ind = (rand() % _radios.size() / 2) * 2;
             } while ((rx_squelch_break_ind == (tx_ind - 1)) && (_radios.size() > 1));
             _radios[rx_squelch_break_ind].rx.squelch_status = SQUELCH_OPEN;
-            _radios[rx_squelch_break_ind].rx.agc = 2.3;
+            _radios[rx_squelch_break_ind].rx.agc = 2.2;
             _radios[rx_squelch_break_ind].rx.line_level = -8.0;
             counter_rx_squelch = 0;
         }
@@ -727,7 +727,7 @@ void Radio_Telnet::_simulated_radios_update()
             cur->tx.vswr = 1.0;
             cur_rx->rx.squelch_status = SQUELCH_OPEN;
             cur_rx->rx.line_level = -8;
-            cur_rx->rx.agc = 2.3;
+            cur_rx->rx.agc = 2.6;
 
             if (prev_tx_index != tx_ind)
             {

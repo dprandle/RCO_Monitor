@@ -133,7 +133,7 @@ This should cover all properties and allow testing of property conditions and fi
 Below is a commented json config to show all options for all variables. Defaults values are given, except for loggers which defaults to empty. If the value
 isn't provided in the config file, the default value is used.
 
-```json
+```json5
 {
     // bool - If false all loggers are disabled - no csv files will be generated
     "logging_enabled": true,

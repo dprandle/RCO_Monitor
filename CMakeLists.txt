@@ -69,21 +69,11 @@ FILE_PERMISSIONS OWNER_WRITE OWNER_READ GROUP_WRITE GROUP_READ WORLD_READ)
 file (RENAME ${CMAKE_BINARY_DIR}/Firmware/bin/ANCE_config.json ${CMAKE_BINARY_DIR}/Firmware/bin/config.json)
 endif()
 
-
 file (COPY ${CMAKE_SOURCE_DIR}/cfg/RCO_config.json
 DESTINATION ${CMAKE_BINARY_DIR}/Firmware
 FILE_PERMISSIONS OWNER_WRITE OWNER_READ GROUP_WRITE GROUP_READ WORLD_READ)
 file (RENAME ${CMAKE_BINARY_DIR}/Firmware/RCO_config.json ${CMAKE_BINARY_DIR}/Firmware/config.json)
 
-file(WRITE ${CMAKE_BINARY_DIR}/tmp/enable_radio_monitor.sh
-"chmod +x ${TARGET_NAME} && ln -s ${TARGET_NAME} ${PROJECT_NAME}
-sudo systemctl link /home/ubuntu/${PROJECT_NAME}.service
-sudo systemctl enable ${PROJECT_NAME}
-sudo reboot")
-
-file (COPY ${CMAKE_BINARY_DIR}/tmp/enable_radio_monitor.sh 
-DESTINATION ${CMAKE_BINARY_DIR}/Firmware
-FILE_PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_WRITE GROUP_READ WORLD_EXECUTE WORLD_READ)
 
 file(WRITE ${CMAKE_BINARY_DIR}/Firmware/${PROJECT_NAME}.service
 "[Unit]

@@ -372,7 +372,6 @@ void parse_item_groupj(const nlohmann::json & source, const std::string & name, 
 void Radio_Telnet::_set_options_from_config_file(Config_File * cfg)
 {
     nlohmann::json obj;
-    bool added_status_log = false;
 
     cfg->fill_param_if_found("logging_enabled", &_logging);
     cfg->fill_param_if_found("simulate_radios", &_simulate_radios);
@@ -429,10 +428,7 @@ void Radio_Telnet::_set_options_from_config_file(Config_File * cfg)
 
         try
         {
-            // Only one log entry can log additionally to the status log
-            if (!added_status_log)
-                added_status_log =
-                    fill_param_if_found(*iter, "log_changes_to_status", &le.loptions.log_changes_to_status) && le.loptions.log_changes_to_status;
+            fill_param_if_found(*iter, "log_changes_to_status", &le.loptions.log_changes_to_status);
         }
         catch (nlohmann::detail::exception & e)
         {
@@ -481,6 +477,12 @@ void Radio_Telnet::_init_radios()
     {
         for (int8_t i = 0; i < size; ++i)
         {
+            if (!edm.running())
+            {
+                ilog("Breaking from radio init after {} radios as process was stopped", i+1);
+                return;
+            }
+
             std::string ip_last_octet = std::to_string(_ip_lb + i);
             std::string ip = "192.168.102." + ip_last_octet;
 
@@ -548,8 +550,13 @@ void Radio_Telnet::release()
     }
 }
 
-bool _check_status_option(const Logger_Options & le, const std::string & param_name, int32_t cur_status, int32_t prev_status, const CM300_Radio * rad)
+bool _check_status_option(const Logger_Entry & logger_ent,
+                          const std::string & param_name,
+                          int32_t cur_status,
+                          int32_t prev_status,
+                          const CM300_Radio * rad)
 {
+    const Logger_Options & le = logger_ent.loptions;
     auto iter = le.item_options.find(param_name);
     if (iter != le.item_options.end())
     {
@@ -572,7 +579,14 @@ bool _check_status_option(const Logger_Options & le, const std::string & param_n
                 cur_string = squelch_string(cur_status);
             }
 
-            ilog("{} {} ({}): {} changed to {} (was {})", rad->freq_mhz, rad->radio_type(), rad->serial, pm, cur_string, prev_string);
+            ilog("{} {} ({}) for logger {}: {} changed to {} (was {})",
+                 rad->freq_mhz,
+                 rad->radio_type(),
+                 rad->serial,
+                 logger_ent.name,
+                 pm,
+                 cur_string,
+                 prev_string);
         }
 
         bool cond_equal = (iter->second.equal.enabled && BITS_SET(iter->second.equal.val, cur_status));
@@ -581,8 +595,9 @@ bool _check_status_option(const Logger_Options & le, const std::string & param_n
     return false;
 }
 
-bool _check_float_option(const Logger_Options & le, const std::string & param_name, float cur_val, float prev_val, const CM300_Radio * rad)
+bool _check_float_option(const Logger_Entry & logger_ent, const std::string & param_name, float cur_val, float prev_val, const CM300_Radio * rad)
 {
+    const Logger_Options & le = logger_ent.loptions;
     auto iter = le.item_options.find(param_name);
     if (iter != le.item_options.end())
     {
@@ -600,10 +615,11 @@ bool _check_float_option(const Logger_Options & le, const std::string & param_na
             std::string pm(param_name);
             if (iter->second.title.enabled && !iter->second.title.val.empty())
                 pm = iter->second.title.val;
-            ilog("{} {} ({}): {} changed over log threshold to {} (was {} - change of {}%)",
+            ilog("{} {} ({}) for logger {}: {} changed over log threshold to {} (was {} - change of {}%)",
                  rad->freq_mhz,
                  rad->radio_type(),
                  rad->serial,
+                 logger_ent.name,
                  pm,
                  cur_val,
                  prev_val,
@@ -646,32 +662,32 @@ void Logger_Entry::update_and_log_if_needed(const std::vector<CM300_Radio> & rad
             {
                 if (is_tx)
                 {
-                    should_log = _check_status_option(loptions, "ptt_status", cur->tx.ptt_status, prev->tx.ptt_status, cur) || should_log;
-                    should_log = _check_float_option(loptions, "forward_power", cur->tx.forward_power, prev->tx.forward_power, cur) || should_log;
-                    should_log = _check_float_option(loptions, "reverse_power", cur->tx.reverse_power, prev->tx.reverse_power, cur) || should_log;
-                    should_log = _check_float_option(loptions, "vswr", cur->tx.vswr, prev->tx.vswr, cur) || should_log;
+                    should_log = _check_status_option(*this, "ptt_status", cur->tx.ptt_status, prev->tx.ptt_status, cur) || should_log;
+                    should_log = _check_float_option(*this, "forward_power", cur->tx.forward_power, prev->tx.forward_power, cur) || should_log;
+                    should_log = _check_float_option(*this, "reverse_power", cur->tx.reverse_power, prev->tx.reverse_power, cur) || should_log;
+                    should_log = _check_float_option(*this, "vswr", cur->tx.vswr, prev->tx.vswr, cur) || should_log;
                 }
                 else
                 {
-                    should_log = _check_status_option(loptions, "squelch_status", cur->rx.squelch_status, prev->rx.squelch_status, cur) || should_log;
-                    should_log = _check_float_option(loptions, "agc", cur->rx.agc, prev->rx.agc, cur) || should_log;
-                    should_log = _check_float_option(loptions, "line_level", cur->rx.line_level, prev->rx.line_level, cur) || should_log;
+                    should_log = _check_status_option(*this, "squelch_status", cur->rx.squelch_status, prev->rx.squelch_status, cur) || should_log;
+                    should_log = _check_float_option(*this, "agc", cur->rx.agc, prev->rx.agc, cur) || should_log;
+                    should_log = _check_float_option(*this, "line_level", cur->rx.line_level, prev->rx.line_level, cur) || should_log;
                 }
             }
             else
             {
                 if (is_tx)
                 {
-                    should_log = should_log || _check_status_option(loptions, "ptt_status", cur->tx.ptt_status, prev->tx.ptt_status, cur);
-                    should_log = should_log || _check_float_option(loptions, "forward_power", cur->tx.forward_power, prev->tx.forward_power, cur);
-                    should_log = should_log || _check_float_option(loptions, "reverse_power", cur->tx.reverse_power, prev->tx.reverse_power, cur);
-                    should_log = should_log || _check_float_option(loptions, "vswr", cur->tx.vswr, prev->tx.vswr, cur);
+                    should_log = should_log || _check_status_option(*this, "ptt_status", cur->tx.ptt_status, prev->tx.ptt_status, cur);
+                    should_log = should_log || _check_float_option(*this, "forward_power", cur->tx.forward_power, prev->tx.forward_power, cur);
+                    should_log = should_log || _check_float_option(*this, "reverse_power", cur->tx.reverse_power, prev->tx.reverse_power, cur);
+                    should_log = should_log || _check_float_option(*this, "vswr", cur->tx.vswr, prev->tx.vswr, cur);
                 }
                 else
                 {
-                    should_log = should_log || _check_status_option(loptions, "squelch_status", cur->rx.squelch_status, prev->rx.squelch_status, cur);
-                    should_log = should_log || _check_float_option(loptions, "agc", cur->rx.agc, prev->rx.agc, cur);
-                    should_log = should_log || _check_float_option(loptions, "line_level", cur->rx.line_level, prev->rx.line_level, cur);
+                    should_log = should_log || _check_status_option(*this, "squelch_status", cur->rx.squelch_status, prev->rx.squelch_status, cur);
+                    should_log = should_log || _check_float_option(*this, "agc", cur->rx.agc, prev->rx.agc, cur);
+                    should_log = should_log || _check_float_option(*this, "line_level", cur->rx.line_level, prev->rx.line_level, cur);
                 }
             }
         }
@@ -873,7 +889,7 @@ void Radio_Telnet::_update_thumb_drive_status()
         {
             _reset_sim = true;
             complete_scans = 0;
-            
+
             ilog("Thumb drive detected - trying to reload the config from {}", THUMB_DRIVE_MNT_DIR);
             edm.mount_drive();
 
@@ -1041,7 +1057,7 @@ std::string Logger_Entry::get_fname()
     time_t t = time(nullptr);
     tm * ltm = localtime(&t);
 
-    std::string fname = name + " [" + util::formatted_date(ltm) + " at " + std::to_string(ltm->tm_hour * 100) + "].csv";
+    std::string fname = name + " (" + util::formatted_date(ltm) + ").csv";
     if (!loptions.dir_path.empty())
     {
         if (loptions.dir_path.back() != '/')
@@ -1055,30 +1071,11 @@ bool Logger_Entry::write_headers_to_file()
 {
     std::ofstream output;
     std::string fname = get_fname();
-
-    if (util::path_exists(fname))
-    {
-        std::string new_name = fname.substr(0, fname.size() - 4) + " (Stopped " + util::get_current_time_string_no_colon() + ").csv";
-        if (std::rename(fname.c_str(), new_name.c_str()) == 0)
-        {
-            ilog("Renaming {} to {} (logger restarted)", fname, new_name);
-        }
-        else
-        {
-            wlog("Could not rename {} to {}: {}", fname, new_name, strerror(errno));
-        }
-    }
-    else
-    {
-        ilog("{} does not yet exist - creating file", fname);
-    }
-
-    output.open(fname, std::ios::out | std::ios::trunc);
+    output.open(fname, std::ios::out | std::ios::app);
     if (output.is_open())
     {
         ilog("Successfully opened {} for logging", fname);
         output << get_header() << "\n";
-        output.flush();
         output.close();
         return true;
     }
@@ -1100,11 +1097,19 @@ bool Logger_Entry::write_headers_to_file()
 
 bool Logger_Entry::write_radio_data_to_file()
 {
+    bool write_header = false;
     std::ofstream output;
     std::string fname = get_fname();
+    
+    if (!util::path_exists(fname))
+        write_header = true;
+
     output.open(fname, std::ios::out | std::ios::app);
     if (output.is_open())
     {
+        if (write_header)
+            output << get_header() << "\n";
+        
         output << get_row() << "\n";
         output.close();
         return true;

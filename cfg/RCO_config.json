@@ -11,6 +11,7 @@
     "loggers": {
         "PTT_SQ_Active_Changed_250ms": {
             "dir_path":"/home/ubuntu/csvlogs",
+            "log_changes_to_status": true,
             "period": 250,
             "ptt_status": {
                 "title": "PTT",

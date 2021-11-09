@@ -198,6 +198,10 @@ isn't provided in the config file, the default value is used.
             // string - the folder where this logger should be saved
             "dir_path": "/home/ubuntu/csvlogs",
 
+            // bool - If this is true, then any "change" (or percent change for floats) that causes an entry to be added to the log
+            // will also be logged in the status log.
+            "log_changes_to_status": false,
+
             // int - scan period in milliseconds - ie scan the radios every period ms. A value of 0 means as fast as you can
             "period": 0,
 

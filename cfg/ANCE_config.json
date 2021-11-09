@@ -62,8 +62,8 @@
             }
         },
         "PTT_SQ_Changed_100ms": {
-            "log_changes_to_status": true,
             "dir_path":"/media/usb0/csvlogs",
+            "log_changes_to_status": true,
             "period": 100,
             "ptt_status": {
                 "title": "PTT",

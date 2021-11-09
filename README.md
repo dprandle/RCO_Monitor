@@ -22,7 +22,7 @@ Radio logs are generated in two possible locations:
 
 Radio log format and generation is determined by the loaded config.json file. The filename of the generated log file is "Name_Of_Logger (Date).csv". This means, a new file is generated for every day of logging. If there are a lot of radios, and the logging period is short, there can be a huge amount of data per log.
 
-The deployment package can be found [here] (https://docs.google.com/document/d/1WjWND-U78ZBYJoIlb42E0mNrbUn4aCda/edit?usp=sharing&ouid=101072115658933791924&rtpof=true&sd=true)
+The deployment package can be found [here](https://docs.google.com/document/d/1WjWND-U78ZBYJoIlb42E0mNrbUn4aCda/edit?usp=sharing&ouid=101072115658933791924&rtpof=true&sd=true).
 
 A guide on the startup config file can be found [here](Config.md).
 

@@ -20,11 +20,15 @@ bool read_file_contents_to_string(const std::string & fname, std::string & conte
 
 std::string formatted_date(tm * time_struct);
 
+std::string formatted_time_no_colon(tm * time_struct);
+
 std::string formatted_time(tm * time_struct);
 
 std::string get_current_date_string();
 
 std::string get_current_time_string();
+
+std::string get_current_time_string_no_colon();
 
 uint32_t hash_id(const char * to_hash);
 
@@ -32,7 +36,7 @@ void delay(double ms);
 
 bool path_exists(const std::string & name);
 
-std::string get_home_dir();
+std::string get_home_dir(const std::vector<std::string> & username_try_vec);
 
 /// Get the count of files in the dir - ignores . and ..
 uint16_t files_in_dir(const char * dir);

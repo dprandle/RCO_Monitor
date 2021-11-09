@@ -66,7 +66,7 @@
         "forward_list": "cpp",
         "valarray": "cpp"
     },
-    "cmake.parallelJobs": 12,
+    "cmake.parallelJobs": 2,
     "search.exclude": {
         "deploy/": false,
     }

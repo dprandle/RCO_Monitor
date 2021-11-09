@@ -4,7 +4,6 @@
 #include <fstream>
 #include <stdio.h>
 #include <cmath>
-#include <set>
 #include <random>
 
 #include "config_file.h"
@@ -197,10 +196,7 @@ CM300_Radio::CM300_Radio()
 {}
 
 CM300_Radio::~CM300_Radio()
-{
-    if (sk)
-        delete sk;
-}
+{}
 
 std::string CM300_Radio::radio_type() const
 {
@@ -254,6 +250,7 @@ bool CM300_Radio::initialized() const
 
 Radio_Telnet::Radio_Telnet()
     : _logging(true),
+      _reset_sim(false),
       _simulate_radios(false),
       _simulation_period(2000),
       _simulated_high_vswr_period_count(30),
@@ -262,6 +259,7 @@ Radio_Telnet::Radio_Telnet()
       _ip_ub(13),
       _max_retry_count(10),
       _conn_timeout(0, 500000),
+      all_radios_init(false),
       _cur_cmd(INVALID_VALUE),
       commands{cmd::str::ID, cmd::str::FREQ, cmd::str::MEAS, cmd::str::RSTAT},
       complete_scans(0)
@@ -374,7 +372,7 @@ void parse_item_groupj(const nlohmann::json & source, const std::string & name, 
 void Radio_Telnet::_set_options_from_config_file(Config_File * cfg)
 {
     nlohmann::json obj;
-    static bool added_status_log = false;
+    bool added_status_log = false;
 
     cfg->fill_param_if_found("logging_enabled", &_logging);
     cfg->fill_param_if_found("simulate_radios", &_simulate_radios);
@@ -401,13 +399,20 @@ void Radio_Telnet::_set_options_from_config_file(Config_File * cfg)
         }
         if (!le.loptions.dir_path.empty())
         {
+            errno = 0;
             if (mkdir(le.loptions.dir_path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == 0)
             {
                 ilog("Created dir {} for log {}", le.loptions.dir_path, le.name);
             }
+            else
+            {
+                ilog("Did not create dir {} for log {}: {}", le.loptions.dir_path, le.name, strerror(errno));
+            }
         }
 
-        le._backup_log_dir = util::get_home_dir() + "/csvlogs";
+        std::string home_dir = util::get_home_dir({"ubuntu", "dprandle", "root"});
+
+        le._backup_log_dir = home_dir + "/csvlogs";
         if (mkdir(le._backup_log_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == 0)
         {
             ilog("Created backup log dir {} for logger {}", le._backup_log_dir, le.name);
@@ -451,10 +456,15 @@ void Radio_Telnet::init(Config_File * config)
 {
     Subsystem::init(config);
     _set_options_from_config_file(config);
+    _init_radios();
+}
+
+void Radio_Telnet::_init_radios()
+{
+    all_radios_init = false;
+    initialized_radios.clear();
 
     int8_t size = (_ip_ub - _ip_lb + 1);
-    int64_t arg = 0;
-
     if (_simulate_radios)
     {
         int radio_set_count = size / 2;
@@ -529,7 +539,13 @@ void Radio_Telnet::release()
     Subsystem::release();
     complete_scans = 0;
     _cur_cmd = 0;
-    _radios.clear();
+    _loggers.clear();
+
+    while (!_radios.empty())
+    {
+        delete _radios.back().sk;
+        _radios.pop_back();
+    }
 }
 
 bool _check_status_option(const Logger_Options & le, const std::string & param_name, int32_t cur_status, int32_t prev_status, const CM300_Radio * rad)
@@ -612,6 +628,7 @@ void Logger_Entry::update_and_log_if_needed(const std::vector<CM300_Radio> & rad
     ms_counter += edm.sys_timer()->dt();
     bool should_log = false;
 
+    //ilog("mscounter: {}   loptions.period {}   radios size {}",ms_counter, loptions.period, radios.size());
     if (ms_counter >= loptions.period)
     {
         ms_counter = 0;
@@ -677,13 +694,24 @@ void Radio_Telnet::_simulated_radios_update()
     static double counter = 0;
     static int counter_high_vswr = 0;
     static int counter_rx_squelch = 0;
-
-    counter += edm.sys_timer()->dt();
-
     static size_t tx_ind = 1;
     static uint8_t CUR_PTT_STATE = PTT_LOCAL;
     static size_t rx_squelch_break_ind = -1;
 
+    counter += edm.sys_timer()->dt();
+
+    if (_reset_sim)
+    {
+        counter = 0;
+        counter_high_vswr = 0;
+        counter_rx_squelch = 0;
+        tx_ind = 1;
+        CUR_PTT_STATE = PTT_LOCAL;
+        rx_squelch_break_ind = -1;
+        _reset_sim = false;
+    }
+
+    //ilog("In simulation");
     // Simulate PTT on cycling radios (RX and TX) switching the radio every 2 seconds
     // Also generate a high VSWR on a transmitter every minute
     // Finally, generate random radio squelch breaks every 10 seconds - should always be on a radio that is not currently keyed
@@ -773,9 +801,6 @@ void Radio_Telnet::_simulated_radios_update()
 
 void Radio_Telnet::update()
 {
-    static std::set<CM300_Radio *> initialized_radios;
-    static bool all_radios_init = false;
-
     bool complete_scan = true;
 
     auto iter = _radios.begin();
@@ -834,6 +859,79 @@ void Radio_Telnet::update()
             ++liter;
         }
     }
+
+    _update_thumb_drive_status();
+}
+
+void Radio_Telnet::_update_thumb_drive_status()
+{
+    static bool thmb_drive_prev = edm.thumb_drive_detected();
+    bool thmb_drive_cur = edm.thumb_drive_detected();
+    if (thmb_drive_prev != thmb_drive_cur)
+    {
+        if (thmb_drive_cur)
+        {
+            _reset_sim = true;
+            complete_scans = 0;
+            
+            ilog("Thumb drive detected - trying to reload the config from {}", THUMB_DRIVE_MNT_DIR);
+            edm.mount_drive();
+
+            Config_File cfg;
+            edm.load_config(&cfg);
+
+            // Save previous values
+            bool sim_radios_prev = _simulate_radios;
+            int8_t prev_ip_up = _ip_ub;
+            int8_t prev_ip_low = _ip_lb;
+
+            _loggers.clear();
+            _set_options_from_config_file(&cfg);
+
+            if (prev_ip_up != _ip_ub || prev_ip_low != _ip_lb || _simulate_radios != sim_radios_prev)
+            {
+                ilog("Config file found on {} and it required reinitializing radios", THUMB_DRIVE_MNT_DIR);
+                complete_scans = 0;
+                _cur_cmd = 0;
+                while (!_radios.empty())
+                {
+                    delete _radios.back().sk;
+                    _radios.pop_back();
+                }
+                _init_radios();
+            }
+            else
+            {
+                ilog("No need to reinitialize the radios - {} loggers being reinitialized", _loggers.size());
+                // Setup the loggers prev state to now!
+                auto liter = _loggers.begin();
+                while (liter != _loggers.end())
+                {
+                    liter->second.prev_state = _radios;
+                    liter->second.write_headers_to_file();
+                    liter->second.write_radio_data_to_file();
+                    ++liter;
+                }
+            }
+        }
+        else
+        {
+            //rmdir(THUMB_DRIVE_MNT_DIR.c_str());
+            ilog("Thumb drive removed - unmounting /dev/sda1 from {}", THUMB_DRIVE_MNT_DIR);
+            edm.unmount_drive();
+
+            // Setup the loggers prev state to now!
+            auto liter = _loggers.begin();
+            while (liter != _loggers.end())
+            {
+                liter->second.prev_state = _radios;
+                liter->second.write_headers_to_file();
+                liter->second.write_radio_data_to_file();
+                ++liter;
+            }
+        }
+    }
+    thmb_drive_prev = thmb_drive_cur;
 }
 
 void _handle_option_header(const Logger_Options & options, std::vector<std::string> & cur_row, const std::string & param)
@@ -960,15 +1058,19 @@ bool Logger_Entry::write_headers_to_file()
 
     if (util::path_exists(fname))
     {
-        std::string new_name = fname.substr(0, fname.size() - 4) + " (Stopped " + util::get_current_time_string() + ").csv";
+        std::string new_name = fname.substr(0, fname.size() - 4) + " (Stopped " + util::get_current_time_string_no_colon() + ").csv";
         if (std::rename(fname.c_str(), new_name.c_str()) == 0)
         {
-            ilog("Renaming {} to {} as the logger has been restarted (renamed file is from previous execution)", fname, new_name);
+            ilog("Renaming {} to {} (logger restarted)", fname, new_name);
         }
         else
         {
-            wlog("Could not rename {} to {}: {} - the logger was restarted so this file will be overwritten", fname, new_name, strerror(errno));
+            wlog("Could not rename {} to {}: {}", fname, new_name, strerror(errno));
         }
+    }
+    else
+    {
+        ilog("{} does not yet exist - creating file", fname);
     }
 
     output.open(fname, std::ios::out | std::ios::trunc);
@@ -976,6 +1078,7 @@ bool Logger_Entry::write_headers_to_file()
     {
         ilog("Successfully opened {} for logging", fname);
         output << get_header() << "\n";
+        output.flush();
         output.close();
         return true;
     }

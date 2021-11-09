@@ -25,10 +25,11 @@ Uart::Uart(SerialPort uart_num):
 
 bool Uart::start()
 {
+    errno = 0;
 	set_fd(open(m_devpath.c_str(), O_RDWR | O_NOCTTY | O_SYNC));
 	if (m_fd < 0)
 	{
-        elog("Error opening {}",m_devpath);
+        elog("Error opening {}: {}",m_devpath, strerror(errno));
 		return false;
 	}
     _set_attribs();

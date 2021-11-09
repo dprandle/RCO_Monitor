@@ -17,10 +17,19 @@ namespace util
 {
 static std::string locked_str;
 
-std::string get_home_dir()
+
+std::string get_home_dir(const std::vector<std::string> & username_try_vec)
 {
-    struct passwd * pw = getpwuid(getuid());
-    return pw->pw_dir;
+    std::string ret;
+    struct passwd * pwd = nullptr;
+
+    for (int i = 0; i < username_try_vec.size(); ++i)
+    {
+        pwd = getpwnam(username_try_vec[i].c_str());
+        if (pwd)
+            return pwd->pw_dir;
+    }
+    return "";
 }
 
 std::string get_exe_dir()
@@ -94,6 +103,18 @@ void delay(double ms)
 std::string formatted_date(tm * time_struct)
 {
     return std::to_string(1900 + time_struct->tm_year) + "-" + std::to_string(1 + time_struct->tm_mon) + "-" + std::to_string(time_struct->tm_mday);
+}
+
+std::string formatted_time_no_colon(tm * time_struct)
+{
+    return std::to_string(time_struct->tm_hour) + "h" + std::to_string(time_struct->tm_min) + "m" + std::to_string(time_struct->tm_sec) + "s";
+}
+
+std::string get_current_time_string_no_colon()
+{
+    time_t t = time(nullptr);
+    tm * ltm = localtime(&t);
+    return formatted_time_no_colon(ltm);
 }
 
 std::string formatted_time(tm * time_struct)

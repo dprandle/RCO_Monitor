@@ -48,6 +48,10 @@ class Main_Control
 
     bool thumb_drive_detected();
 
+    void unmount_drive();
+
+    void mount_drive();
+
     void start();
 
     const std::string & get_config_fname();

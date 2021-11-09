@@ -9,6 +9,8 @@
 #include "logger.h"
 #include "config_file.h"
 
+const int32_t mount_unmount_wait_ms = 4000;
+
 Main_Control::Main_Control() : m_running(false), m_systimer(new Timer()), logger_(new Logger)
 {
     util::zero_buf(systems_, MAX_SYSTEM_COUNT);
@@ -62,7 +64,6 @@ bool Main_Control::thumb_drive_detected()
     return util::path_exists("/dev/sda");
 }
 
-
 const std::string & Main_Control::get_config_fname()
 {
     return _config_fname;
@@ -78,6 +79,26 @@ void Main_Control::release()
     uint32_t len = util::buf_len(systems_);
     for (int i = 0; i < len; ++i)
         systems_[i]->release();
+    unmount_drive();
+}
+
+void Main_Control::unmount_drive()
+{
+    // if (system(("umount " + THUMB_DRIVE_MNT_DIR).c_str()) == 0)
+    // {
+    //     ilog("Successfully unmounted drive from {} - waiting {}ms", THUMB_DRIVE_MNT_DIR, mount_unmount_wait_ms);
+    //     usleep(mount_unmount_wait_ms*1000);
+    // }
+    errno = 0;
+    if (umount(THUMB_DRIVE_MNT_DIR.c_str()) == 0)
+    {
+        ilog("Unmounted {}",THUMB_DRIVE_MNT_DIR);
+    }
+    else
+    {
+        ilog("Did not unmount {}: {}", THUMB_DRIVE_MNT_DIR, strerror(errno));
+    }
+    rmdir(THUMB_DRIVE_MNT_DIR.c_str());
 }
 
 void Main_Control::update()
@@ -133,23 +154,44 @@ void Main_Control::remove_subsystem(const char * sysname)
     }
 }
 
-bool Main_Control::load_config(Config_File * cfg)
+void Main_Control::mount_drive()
 {
+    mkdir("/media", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     // If a thumb drive is avialable, try to mount it
     if (thumb_drive_detected())
     {
-        std::string mntpoint = "/media/usb0";
-        if (mkdir(mntpoint.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == 0)
+        errno = 0;
+        std::string mntpoint = THUMB_DRIVE_MNT_DIR;
+        if (mkdir(mntpoint.c_str(), 0777) == 0 || errno == EEXIST)
         {
-            ilog("Created thumb drive mount point {} - attempting to mount", mntpoint);
-            if (mount("/dev/sda1", mntpoint.c_str(), "vfat", MS_NOATIME, NULL) == 0)
+            if (errno == EEXIST)
             {
-                ilog("Successfully mounted /dev/sda1 tp {}", mntpoint);
+                ilog("Mount dir {} already exists - attempting to mount", mntpoint);
             }
             else
             {
+                ilog("Created thumb drive mount dir {} - attempting to mount", mntpoint);
+            }
+
+            // Have to use cmd line tool here - no matter what i do sys call mount() doesn't work!
+            int max_retry_count = 50;
+            int cur_retry_count = 0;
+            std::string cmd("mount -o sync /dev/sda1 " + mntpoint);
+            while (system(cmd.c_str()) != 0 && cur_retry_count != max_retry_count)
+            {
+                ilog("Retrying mounted thumb drive at /dev/sda1 to {}", mntpoint);
+                ++cur_retry_count;
+            }
+
+            if (cur_retry_count == max_retry_count)
+            {
                 rmdir(mntpoint.c_str());
-                wlog("Could not mount /dev/sda1 to {}: {}", mntpoint, strerror(errno));
+                wlog("Could not mount /dev/sda1 to {} - reached max retry count for mounting procedure", mntpoint);
+            }
+            else
+            {
+                ilog("Successfully mounted device at /dev/sda1 to {} - waiting {}ms...", mntpoint,mount_unmount_wait_ms);
+                usleep(1000*mount_unmount_wait_ms);
             }
         }
         else
@@ -161,13 +203,17 @@ bool Main_Control::load_config(Config_File * cfg)
     {
         ilog("No thumb drive detected");
     }
+}
 
+bool Main_Control::load_config(Config_File * cfg)
+{
     _config_fname = THUMB_DRIVE_MNT_DIR + "/config.json";
     bool loaded = cfg->load(_config_fname);
     if (!loaded)
     {
         wlog("Could not load config file {}: {} - trying backup path", _config_fname, strerror(errno));
-        _config_fname = util::get_home_dir() + "/config.json";
+        std::string home_dir = util::get_home_dir({"ubuntu", "dprandle", "root"});
+        _config_fname = home_dir + "/config.json";
         loaded = cfg->load(_config_fname);
         if (!loaded)
         {
@@ -189,6 +235,8 @@ bool Main_Control::load_config(Config_File * cfg)
 void Main_Control::start()
 {
     logger_->initialize();
+    unmount_drive();
+    mount_drive();
     ilog("Starting Radio Monitor");
     m_running = true;
     m_systimer->start();

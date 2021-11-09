@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <set>
 #include <unordered_map>
 
 #include "subsystem.h"
@@ -216,8 +217,11 @@ class Radio_Telnet : public Subsystem
     void _extract_string_to_radio(CM300_Radio * radio, const std::string & str);
     void _set_options_from_config_file(Config_File * cfg);
     void _simulated_radios_update();
+    void _update_thumb_drive_status();
+    void _init_radios();
 
     bool _logging;
+    bool _reset_sim;
 
     bool _simulate_radios;
     uint32_t _simulation_period;
@@ -228,6 +232,9 @@ class Radio_Telnet : public Subsystem
     int8_t _ip_ub;
     uint8_t _max_retry_count;
     Timeout_Interval _conn_timeout;
+
+    std::set<CM300_Radio *> initialized_radios;
+    bool all_radios_init;
 
     size_t _cur_cmd;
     std::string commands[COMMAND_COUNT];

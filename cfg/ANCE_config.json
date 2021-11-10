@@ -1,11 +1,11 @@
 {
     "logging_enabled": true,
-    "simulate_radios": true,
+    "simulate_radios": false,
     "simulation_period": 1000,
     "simulation_high_vswr_period_count": 5,
     "simulation_random_squelch_break_period_count": 7,
     "ip_lower_bound": 10,
-    "ip_upper_bound": 13,
+    "ip_upper_bound": 59,
     "max_radio_retry_reconnect_count": 10,
     "connection_timeout": {
         "seconds": 0,

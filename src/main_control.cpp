@@ -171,7 +171,7 @@ void Main_Control::mount_drive()
             // Have to use cmd line tool here - no matter what i do sys call mount() doesn't work!
             int max_retry_count = 50;
             int cur_retry_count = 0;
-            std::string cmd("mount -o /dev/sda1 " + mntpoint);
+            std::string cmd("mount /dev/sda1 " + mntpoint);
             while (system(cmd.c_str()) != 0 && cur_retry_count != max_retry_count)
             {
                 ilog("Retrying mounted usb drive at /dev/sda1 to {}", mntpoint);

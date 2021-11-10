@@ -93,7 +93,7 @@ void create_simulated_radio_set(std::vector<CM300_Radio> & radios, int vcount, i
         else
         {
             rad.serial.push_back('R');
-            rnum = (rand() % 1400) + 11800;
+            rnum = (rand() % 17500) + 22500;
             f = double(rnum) / 100.0;
         }
 

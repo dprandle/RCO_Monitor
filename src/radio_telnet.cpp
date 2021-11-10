@@ -876,13 +876,13 @@ void Radio_Telnet::update()
         }
     }
 
-    _update_thumb_drive_status();
+    _update_usb_drive_status();
 }
 
-void Radio_Telnet::_update_thumb_drive_status()
+void Radio_Telnet::_update_usb_drive_status()
 {
-    static bool thmb_drive_prev = edm.thumb_drive_detected();
-    bool thmb_drive_cur = edm.thumb_drive_detected();
+    static bool thmb_drive_prev = edm.usb_drive_detected();
+    bool thmb_drive_cur = edm.usb_drive_detected();
     if (thmb_drive_prev != thmb_drive_cur)
     {
         if (thmb_drive_cur)
@@ -890,7 +890,7 @@ void Radio_Telnet::_update_thumb_drive_status()
             _reset_sim = true;
             complete_scans = 0;
 
-            ilog("Thumb drive detected - trying to reload the config from {}", THUMB_DRIVE_MNT_DIR);
+            ilog("USB drive detected - trying to reload the config from {}", USB_DRIVE_MNT_DIR);
             edm.mount_drive();
 
             Config_File cfg;
@@ -906,7 +906,7 @@ void Radio_Telnet::_update_thumb_drive_status()
 
             if (prev_ip_up != _ip_ub || prev_ip_low != _ip_lb || _simulate_radios != sim_radios_prev)
             {
-                ilog("Config file found on {} and it required reinitializing radios", THUMB_DRIVE_MNT_DIR);
+                ilog("Config file found on {} and it required reinitializing radios", USB_DRIVE_MNT_DIR);
                 complete_scans = 0;
                 _cur_cmd = 0;
                 while (!_radios.empty())
@@ -932,8 +932,7 @@ void Radio_Telnet::_update_thumb_drive_status()
         }
         else
         {
-            //rmdir(THUMB_DRIVE_MNT_DIR.c_str());
-            ilog("Thumb drive removed - unmounting /dev/sda1 from {}", THUMB_DRIVE_MNT_DIR);
+            ilog("USB drive removed - unmounting /dev/sda1 from {}", USB_DRIVE_MNT_DIR);
             edm.unmount_drive();
 
             // Setup the loggers prev state to now!

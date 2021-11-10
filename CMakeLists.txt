@@ -84,7 +84,6 @@ StartLimitIntervalSec=0
 Type=simple
 Restart=on-failure
 RestartSec=1
-User=ubuntu
 ExecStart=/home/ubuntu/bin/${PROJECT_NAME}
 WorkingDirectory=/home/ubuntu/bin
 

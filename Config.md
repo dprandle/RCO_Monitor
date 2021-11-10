@@ -16,7 +16,7 @@ The default config file shipped with the radio logger is [here](cfg/RCO_config.j
 
 A custom config for ANCE can be found [here](cfg/ANCE_config.json). This has four loggers: one logs everything every 500ms, two do the same as the two RCO loggers, and an additional logger scans every 100 ms and logs entrees when either PTT or squelch status changes (but not continually while active).
 
-The dir_path for the ANCE config file assumes the PI has usbmount installed and a thumb drive is in the PI. This is so it is easy to pull the logs from the PI. If there is no thumb drive (or usbmount is not installed), the dir_path reverts to /home/ubuntu/csvlogs which is the home path on the PI. In general, if the path provided by dir_path can't be found, /home/ubuntu/csvlogs will be used.
+The dir_path for the ANCE config file assumes the PI has usbmount installed and a usb drive is in the PI. This is so it is easy to pull the logs from the PI. If there is no usb drive (or usbmount is not installed), the dir_path reverts to /home/ubuntu/csvlogs which is the home path on the PI. In general, if the path provided by dir_path can't be found, /home/ubuntu/csvlogs will be used.
 
 ## Logging Conditions
 
@@ -96,7 +96,7 @@ If the top level property "simulate_radios" is set to true, ie as shown here:
 }
 ```
 
-then the radio monitor program will not attempt to connect to any radios, and instead will generate fake simulated radios. The purpose of this is to quickly/easily test your config settings making sure logs are generating when/where/how you want them. It is also to stress test the PI with large numbers of radios and large amounts of data, and to get an idea of how big the generated files might be (ie is your thumb drive big enough for the duration?).
+then the radio monitor program will not attempt to connect to any radios, and instead will generate fake simulated radios. The purpose of this is to quickly/easily test your config settings making sure logs are generating when/where/how you want them. It is also to stress test the PI with large numbers of radios and large amounts of data, and to get an idea of how big the generated files might be (ie is your usb drive big enough for the duration?).
 
 The ip upper and lower bounds are used to determine the number of radios to create for the simulation. The total number of radios will be ip_upper_bound - ip_lower_bound + 1. Keep in mind, radios are created in sets so if the previous calc results in an odd number, it will be rounded down to the closest even number. This means if you say ip_upper_bound = 10 and ip_lower_bound = 10, the result of 1 will round to 0 and no radios will be made.
 

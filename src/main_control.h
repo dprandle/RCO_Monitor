@@ -5,7 +5,7 @@
 #include <inttypes.h>
 #include <string>
 
-const std::string THUMB_DRIVE_MNT_DIR = "/media/usb0";
+const std::string USB_DRIVE_MNT_DIR = "/media/usb0";
 const uint32_t MAX_SYSTEM_COUNT = 10;
 
 class Subsystem;
@@ -46,7 +46,7 @@ class Main_Control
 
     void restart_updated(const char * exe_path, const char * const params[]);
 
-    bool thumb_drive_detected();
+    bool usb_drive_detected();
 
     void unmount_drive();
 

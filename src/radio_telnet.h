@@ -217,7 +217,7 @@ class Radio_Telnet : public Subsystem
     void _extract_string_to_radio(CM300_Radio * radio, const std::string & str);
     void _set_options_from_config_file(Config_File * cfg);
     void _simulated_radios_update();
-    void _update_thumb_drive_status();
+    void _update_usb_drive_status();
     void _init_radios();
 
     bool _logging;

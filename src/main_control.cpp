@@ -59,7 +59,7 @@ void Main_Control::restart_updated(const char * exe_path, const char * const par
     }
 }
 
-bool Main_Control::thumb_drive_detected()
+bool Main_Control::usb_drive_detected()
 {
     return util::path_exists("/dev/sda");
 }
@@ -84,21 +84,16 @@ void Main_Control::release()
 
 void Main_Control::unmount_drive()
 {
-    // if (system(("umount " + THUMB_DRIVE_MNT_DIR).c_str()) == 0)
-    // {
-    //     ilog("Successfully unmounted drive from {} - waiting {}ms", THUMB_DRIVE_MNT_DIR, mount_unmount_wait_ms);
-    //     usleep(mount_unmount_wait_ms*1000);
-    // }
     errno = 0;
-    if (umount(THUMB_DRIVE_MNT_DIR.c_str()) == 0)
+    if (umount(USB_DRIVE_MNT_DIR.c_str()) == 0)
     {
-        ilog("Unmounted {}",THUMB_DRIVE_MNT_DIR);
+        ilog("Unmounted {}",USB_DRIVE_MNT_DIR);
     }
     else
     {
-        ilog("Did not unmount {}: {}", THUMB_DRIVE_MNT_DIR, strerror(errno));
+        ilog("Did not unmount {}: {}", USB_DRIVE_MNT_DIR, strerror(errno));
     }
-    rmdir(THUMB_DRIVE_MNT_DIR.c_str());
+    rmdir(USB_DRIVE_MNT_DIR.c_str());
 }
 
 void Main_Control::update()
@@ -157,11 +152,11 @@ void Main_Control::remove_subsystem(const char * sysname)
 void Main_Control::mount_drive()
 {
     mkdir("/media", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-    // If a thumb drive is avialable, try to mount it
-    if (thumb_drive_detected())
+    // If a usb drive is avialable, try to mount it
+    if (usb_drive_detected())
     {
         errno = 0;
-        std::string mntpoint = THUMB_DRIVE_MNT_DIR;
+        std::string mntpoint = USB_DRIVE_MNT_DIR;
         if (mkdir(mntpoint.c_str(), 0777) == 0 || errno == EEXIST)
         {
             if (errno == EEXIST)
@@ -170,16 +165,16 @@ void Main_Control::mount_drive()
             }
             else
             {
-                ilog("Created thumb drive mount dir {} - attempting to mount", mntpoint);
+                ilog("Created usb drive mount dir {} - attempting to mount", mntpoint);
             }
 
             // Have to use cmd line tool here - no matter what i do sys call mount() doesn't work!
             int max_retry_count = 50;
             int cur_retry_count = 0;
-            std::string cmd("mount -o sync /dev/sda1 " + mntpoint);
+            std::string cmd("mount -o /dev/sda1 " + mntpoint);
             while (system(cmd.c_str()) != 0 && cur_retry_count != max_retry_count)
             {
-                ilog("Retrying mounted thumb drive at /dev/sda1 to {}", mntpoint);
+                ilog("Retrying mounted usb drive at /dev/sda1 to {}", mntpoint);
                 ++cur_retry_count;
             }
 
@@ -196,18 +191,18 @@ void Main_Control::mount_drive()
         }
         else
         {
-            ilog("Could not create mount point {} for thumb drive: {}", mntpoint, strerror(errno));
+            ilog("Could not create mount point {} for usb drive: {}", mntpoint, strerror(errno));
         }
     }
     else
     {
-        ilog("No thumb drive detected");
+        ilog("No usb drive detected");
     }
 }
 
 bool Main_Control::load_config(Config_File * cfg)
 {
-    _config_fname = THUMB_DRIVE_MNT_DIR + "/config.json";
+    _config_fname = USB_DRIVE_MNT_DIR + "/config.json";
     bool loaded = cfg->load(_config_fname);
     if (!loaded)
     {
@@ -225,7 +220,7 @@ bool Main_Control::load_config(Config_File * cfg)
                 wlog("Aaand finally, could not load config file at {}: {} - no radio logging will happen without config!",
                      _config_fname,
                      strerror(errno));
-                _config_fname = THUMB_DRIVE_MNT_DIR + "/config.json";
+                _config_fname = USB_DRIVE_MNT_DIR + "/config.json";
             }
         }
     }
@@ -240,7 +235,7 @@ void Main_Control::start()
     ilog("Starting Radio Monitor");
     m_running = true;
     m_systimer->start();
-    std::string default_config = THUMB_DRIVE_MNT_DIR + "/config.json";
+    std::string default_config = USB_DRIVE_MNT_DIR + "/config.json";
 
     Config_File cfg;
     if (load_config(&cfg))

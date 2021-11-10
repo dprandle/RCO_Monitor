@@ -17,10 +17,12 @@ The service reads a config.json which determines how it operates. The config.jso
 A daily status log is generated during execution in /home/ubuntu/status_logs.
 
 Radio logs are generated in two possible locations:
-- If thumb drive is attached, csv radio logs are generated in csvlogs folder on thumb drive
+- If usb drive is attached, csv radio logs are generated in csvlogs folder on usb drive
 - Otherwise, generated in /ubuntu/home/csvlogs
 
 Radio log format and generation is determined by the loaded config.json file. The filename of the generated log file is "Name_Of_Logger (Date).csv". This means, a new file is generated for every day of logging. If there are a lot of radios, and the logging period is short, there can be a huge amount of data per log.
+
+When logging to jump drive, make sure to **stop the Radio Monitor service before removing the usb drive or turning off the PI**. This is because OS doesn't necessary write data to the usb drive the second its written to file: It buffers it and writes a bunch at once to avoid degrading the drive. Stopping Radio Monitor will unmount the usb drive, which will cause the OS to flush all data writes to the drive, and you won't loose any data.
 
 The deployment package can be found [here](https://docs.google.com/document/d/1WjWND-U78ZBYJoIlb42E0mNrbUn4aCda/edit?usp=sharing&ouid=101072115658933791924&rtpof=true&sd=true).
 

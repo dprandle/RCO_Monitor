@@ -479,7 +479,7 @@ void Radio_Telnet::_init_radios()
         {
             if (!edm.running())
             {
-                ilog("Breaking from radio init after {} radios as process was stopped", i+1);
+                ilog("Breaking from radio init after {} radios as process was stopped", i + 1);
                 return;
             }
 
@@ -846,19 +846,18 @@ void Radio_Telnet::update()
     if (_simulate_radios)
         _simulated_radios_update();
 
-    if (complete_scan)
+    if (all_radios_init && _logging)
     {
-        if (all_radios_init && _logging)
+        auto liter = _loggers.begin();
+        while (liter != _loggers.end())
         {
-            auto liter = _loggers.begin();
-            while (liter != _loggers.end())
-            {
-                liter->second.update_and_log_if_needed(_radios);
-                ++liter;
-            }
+            liter->second.update_and_log_if_needed(_radios);
+            ++liter;
         }
-        ++complete_scans;
     }
+
+    if (complete_scan)
+        ++complete_scans;
 
     if (!all_radios_init && initialized_radios.size() == _radios.size())
     {
@@ -1099,7 +1098,7 @@ bool Logger_Entry::write_radio_data_to_file()
     bool write_header = false;
     std::ofstream output;
     std::string fname = get_fname();
-    
+
     if (!util::path_exists(fname))
         write_header = true;
 
@@ -1108,7 +1107,7 @@ bool Logger_Entry::write_radio_data_to_file()
     {
         if (write_header)
             output << get_header() << "\n";
-        
+
         output << get_row() << "\n";
         output.close();
         return true;
